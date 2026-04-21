@@ -70,6 +70,18 @@ export default function Nav() {
             )}
           </button>
 
+        </div>
+
+        <Link href="/" className="nav-logo" style={{ textAlign: "center", lineHeight: 1.05 }}>
+          <div
+            className="serif nav-logo-title"
+            style={{ fontWeight: 400, letterSpacing: "0.02em" }}
+          >
+            Robert Morrow
+          </div>
+        </Link>
+
+        <div className="nav-actions">
           <nav className="nav-links" aria-label="Primary">
             {links.map((l) => {
               const active = l.match(pathname);
@@ -92,18 +104,6 @@ export default function Nav() {
               );
             })}
           </nav>
-        </div>
-
-        <Link href="/" className="nav-logo" style={{ textAlign: "center", lineHeight: 1.05 }}>
-          <div
-            className="serif nav-logo-title"
-            style={{ fontWeight: 400, letterSpacing: "0.02em" }}
-          >
-            Robert Morrow
-          </div>
-        </Link>
-
-        <div className="nav-actions">
           <button
             onClick={openCart}
             className="nav-cart-btn"
