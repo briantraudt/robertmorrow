@@ -28,11 +28,27 @@ export async function getPaintings(): Promise<Painting[]> {
     ]);
 
     if (paintingsRes.error) {
-      console.error("getPaintings: paintings query failed:", paintingsRes.error.message);
+      console.error(
+        "RMDBG paintings error:",
+        JSON.stringify({
+          message: paintingsRes.error.message,
+          code: paintingsRes.error.code,
+          details: paintingsRes.error.details,
+          hint: paintingsRes.error.hint,
+        }),
+      );
       throw paintingsRes.error;
     }
     if (imagesRes.error) {
-      console.error("getPaintings: images query failed:", imagesRes.error.message);
+      console.error(
+        "RMDBG images error:",
+        JSON.stringify({
+          message: imagesRes.error.message,
+          code: imagesRes.error.code,
+          details: imagesRes.error.details,
+          hint: imagesRes.error.hint,
+        }),
+      );
       // Don't throw — degrade gracefully to paintings-without-images.
     }
 
@@ -59,10 +75,17 @@ export async function getPaintings(): Promise<Painting[]> {
       images: byPainting.get(p.id) ?? [],
     }));
   } catch (err) {
-    console.error(
-      "getPaintings: falling back to seed data —",
-      err instanceof Error ? err.message : err,
-    );
+    const safeErr =
+      err instanceof Error
+        ? { name: err.name, message: err.message, stack: err.stack?.slice(0, 400) }
+        : { raw: String(err) };
+    console.error("RMDBG getPaintings catch:", JSON.stringify(safeErr));
+    console.error("RMDBG getPaintings env:", JSON.stringify({
+      hasUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+      hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+      hasAnon: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      urlStart: process.env.NEXT_PUBLIC_SUPABASE_URL?.slice(0, 30) ?? null,
+    }));
     return SEED_PAINTINGS;
   }
 }
@@ -80,7 +103,15 @@ export async function getPainting(
       .or(`id.eq.${idOrSlug},slug.eq.${idOrSlug}`)
       .maybeSingle();
     if (error) {
-      console.error("getPainting: paintings query failed:", error.message);
+      console.error(
+        "RMDBG getPainting error:",
+        JSON.stringify({
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+        }),
+      );
       throw error;
     }
     if (painting) {
@@ -94,10 +125,11 @@ export async function getPainting(
       };
     }
   } catch (err) {
-    console.error(
-      "getPainting: falling back to seed —",
-      err instanceof Error ? err.message : err,
-    );
+    const safeErr =
+      err instanceof Error
+        ? { name: err.name, message: err.message, stack: err.stack?.slice(0, 400) }
+        : { raw: String(err) };
+    console.error("RMDBG getPainting catch:", JSON.stringify(safeErr));
   }
   return seedFind(idOrSlug) ?? null;
 }
