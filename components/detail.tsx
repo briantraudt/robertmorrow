@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCart } from "./cart-provider";
 import PaintingImage from "./painting-image";
 import MakeOffer from "./make-offer";
-import { IconArrowLeft, IconClose } from "./icons";
+import { IconArrowLeft } from "./icons";
 import type { Painting } from "@/lib/types";
 
 type Props = {
@@ -95,13 +95,6 @@ export default function Detail({ painting, onClose }: Props) {
             style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 11 }}
           >
             <IconArrowLeft size={14} sw={1.3} /> Back to paintings
-          </button>
-          <button
-            onClick={handleClose}
-            style={{ color: "var(--ink-3)" }}
-            aria-label="Close"
-          >
-            <IconClose size={20} />
           </button>
         </div>
 
