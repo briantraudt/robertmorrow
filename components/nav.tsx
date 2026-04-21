@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import { useCart } from "./cart-provider";
 
 const links = [
-  { href: "/", label: "Paintings", match: (p: string) => p === "/" || p.startsWith("/paintings") },
   { href: "/about", label: "About", match: (p: string) => p.startsWith("/about") },
   { href: "/contact", label: "Contact", match: (p: string) => p.startsWith("/contact") },
 ];

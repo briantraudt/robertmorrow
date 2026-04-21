@@ -1,133 +1,24 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import PaintingImage from "./painting-image";
 import { useCart } from "./cart-provider";
 import type { Painting, Series } from "@/lib/types";
 
 type Filter = "all" | Series;
-type Sort = "curated" | "newest" | "price-asc" | "price-desc";
 
 type Props = { paintings: Painting[]; initialSeries?: Filter };
 
-const SORT_OPTIONS: { value: Sort; label: string }[] = [
-  { value: "curated",    label: "Curated" },
-  { value: "newest",     label: "Newest first" },
-  { value: "price-asc",  label: "Price, low to high" },
-  { value: "price-desc", label: "Price, high to low" },
-];
-
 export default function Gallery({ paintings, initialSeries = "all" }: Props) {
-  const [filter] = useState<Filter>(initialSeries);
-  const [sort, setSort] = useState<Sort>("curated");
-  const [sortOpen, setSortOpen] = useState(false);
-  const sortRef = useRef<HTMLDivElement | null>(null);
+  const filter = initialSeries;
   const { openDetail } = useCart();
 
-  const visible = useMemo(() => {
-    let list = paintings.filter((p) => (filter === "all" ? true : p.series === filter));
-    if (sort === "price-asc") list = [...list].sort((a, b) => a.price - b.price);
-    if (sort === "price-desc") list = [...list].sort((a, b) => b.price - a.price);
-    if (sort === "newest") list = [...list].sort((a, b) => b.year - a.year);
-    return list;
-  }, [paintings, filter, sort]);
-
-  // Close sort menu on outside click / Esc
-  useEffect(() => {
-    if (!sortOpen) return;
-    const onDown = (e: MouseEvent) => {
-      if (sortRef.current && !sortRef.current.contains(e.target as Node)) {
-        setSortOpen(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setSortOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [sortOpen]);
+  const visible =
+    filter === "all" ? paintings : paintings.filter((p) => p.series === filter);
 
   return (
     <section>
-      <div className="gallery-controls">
-        <div className="gallery-controls-inner">
-          <div ref={sortRef} style={{ position: "relative" }}>
-            <button
-              onClick={() => setSortOpen((v) => !v)}
-              aria-haspopup="listbox"
-              aria-expanded={sortOpen}
-              className="small-caps"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                fontSize: 11,
-                letterSpacing: "0.22em",
-                color: "var(--ink)",
-              }}
-            >
-              Sort
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden>
-                <path
-                  d="M6 9l6 6 6-6"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
-            {sortOpen && (
-              <div
-                role="listbox"
-                style={{
-                  position: "absolute",
-                  top: "calc(100% + 12px)",
-                  right: 0,
-                  minWidth: 200,
-                  background: "var(--paper)",
-                  border: "1px solid var(--line)",
-                  padding: "6px 0",
-                  zIndex: 10,
-                  boxShadow: "0 12px 32px rgba(28,25,21,0.08)",
-                }}
-              >
-                {SORT_OPTIONS.map((opt) => {
-                  const selected = sort === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      role="option"
-                      aria-selected={selected}
-                      onClick={() => {
-                        setSort(opt.value);
-                        setSortOpen(false);
-                      }}
-                      style={{
-                        display: "block",
-                        width: "100%",
-                        textAlign: "left",
-                        padding: "10px 18px",
-                        fontSize: 13,
-                        color: selected ? "var(--ink)" : "var(--ink-3)",
-                        background: "transparent",
-                      }}
-                    >
-                      {opt.label}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
       <div className="gallery-wrap">
         <div className="gallery-grid">
           {visible.map((p, i) => (
