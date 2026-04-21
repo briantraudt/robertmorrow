@@ -25,9 +25,7 @@ export const metadata: Metadata = {
     siteName: "Robert Morrow",
     type: "website",
   },
-  icons: {
-    icon: "/favicon.ico",
-  },
+  // Favicon lives at app/icon.svg — Next.js picks it up via file convention.
 };
 
 export default function RootLayout({
