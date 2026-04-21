@@ -11,7 +11,7 @@ import { getPainting } from "@/lib/paintings";
 
 export const runtime = "nodejs";
 
-const SHIPPING_FLAT_USD = 45;
+const DELIVERY_FLAT_USD = 0;
 
 export async function POST(req: Request) {
   try {
@@ -72,9 +72,9 @@ export async function POST(req: Request) {
       shipping_options: [
         {
           shipping_rate_data: {
-            display_name: "Standard shipping",
+            display_name: "Free delivery",
             type: "fixed_amount",
-            fixed_amount: { amount: SHIPPING_FLAT_USD * 100, currency: "usd" },
+            fixed_amount: { amount: DELIVERY_FLAT_USD * 100, currency: "usd" },
             delivery_estimate: {
               minimum: { unit: "business_day", value: 5 },
               maximum: { unit: "business_day", value: 10 },

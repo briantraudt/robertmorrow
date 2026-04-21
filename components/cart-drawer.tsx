@@ -25,8 +25,7 @@ export default function CartDrawer() {
   }, [cartOpen, closeCart]);
 
   const subtotal = cart.reduce((a, p) => a + p.price, 0);
-  const shipping = cart.length > 0 ? 45 : 0;
-  const total = subtotal + shipping;
+  const total = subtotal;
 
   const handleCheckout = () => {
     closeCart();
@@ -180,7 +179,7 @@ export default function CartDrawer() {
             }}
           >
             <Row label="Subtotal" value={`$${subtotal}`} />
-            <Row label="Shipping (flat, US)" value={`$${shipping}`} />
+            <Row label="Delivery" value="Free" />
             <div
               style={{
                 display: "flex",
@@ -217,7 +216,7 @@ export default function CartDrawer() {
                 letterSpacing: "0.05em",
               }}
             >
-              Taxes calculated at checkout. Returns accepted within 14 days.
+              Free delivery. Returns accepted within 14 days.
             </div>
           </div>
         )}

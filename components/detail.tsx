@@ -84,7 +84,7 @@ export default function Detail({ painting, onClose }: Props) {
             borderBottom: "1px solid var(--line-2)",
             position: "sticky",
             top: 0,
-            background: "rgba(247,244,238,0.95)",
+            background: "rgba(252,250,246,0.95)",
             backdropFilter: "blur(10px)",
             zIndex: 1,
           }}
@@ -195,8 +195,8 @@ export default function Detail({ painting, onClose }: Props) {
               <dd>Lower right, verso inscription</dd>
               <dt className="small-caps muted" style={{ fontSize: 10 }}>Framing</dt>
               <dd>Unframed; shipped flat</dd>
-              <dt className="small-caps muted" style={{ fontSize: 10 }}>Shipping</dt>
-              <dd>Flat rate $45 · ships within 5 business days</dd>
+              <dt className="small-caps muted" style={{ fontSize: 10 }}>Delivery</dt>
+              <dd>Free · ships within 5 business days</dd>
             </dl>
 
             {p.note && (

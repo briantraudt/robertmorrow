@@ -42,7 +42,7 @@ export default function Nav() {
         position: "sticky",
         top: 0,
         zIndex: 20,
-        background: "rgba(247, 244, 238, 0.92)",
+        background: "rgba(252, 250, 246, 0.92)",
         backdropFilter: "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",
         borderBottom: "1px solid var(--line-2)",

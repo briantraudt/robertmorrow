@@ -29,9 +29,8 @@ export default function CheckoutFlow() {
     setForm((f) => ({ ...f, [k]: v }));
 
   const subtotal = cart.reduce((a, p) => a + p.price, 0);
-  const shipping = cart.length > 0 ? 45 : 0;
-  const tax = Math.round(subtotal * 0.06);
-  const total = subtotal + shipping + tax;
+  const delivery = 0;
+  const total = subtotal + delivery;
 
   const empty = cart.length === 0 && step !== 4;
 
@@ -147,7 +146,7 @@ export default function CheckoutFlow() {
           <div style={{ display: "flex", gap: 0, marginBottom: 40 }}>
             {[
               { n: 1, label: "Contact" },
-              { n: 2, label: "Shipping" },
+              { n: 2, label: "Delivery" },
               { n: 3, label: "Payment" },
             ].map((s, i) => (
               <div
@@ -218,13 +217,13 @@ export default function CheckoutFlow() {
               <Next
                 onNext={() => setStep(2)}
                 disabled={!form.email || !form.name}
-                label="Continue to shipping"
+                label="Continue to delivery"
               />
             </StepCard>
           )}
 
           {step === 2 && (
-            <StepCard title="Shipping address">
+            <StepCard title="Delivery address">
               <Field
                 label="Address"
                 value={form.address1}
@@ -333,8 +332,7 @@ export default function CheckoutFlow() {
             </ul>
             <hr className="hairline" style={{ margin: "20px 0 16px" }} />
             <Row label="Subtotal" value={`$${subtotal}`} />
-            <Row label="Shipping" value={`$${shipping}`} />
-            <Row label="Estimated tax" value={`$${tax}`} />
+            <Row label="Delivery" value="Free" />
             <div
               style={{
                 display: "flex",
