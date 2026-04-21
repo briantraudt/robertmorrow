@@ -8,13 +8,23 @@ import "server-only";
 import { createClient } from "@supabase/supabase-js";
 
 export function createServerSupabaseClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
 
-  if (!url || (!serviceKey && !anon)) {
+  if (!rawUrl || (!serviceKey && !anon)) {
     throw new Error(
       "Supabase env vars are missing. Copy .env.local.example → .env.local and fill in the values.",
+    );
+  }
+  // Validate the URL format up front (Supabase SDK throws a confusing
+  // "Invalid supabaseUrl: Provided URL is malformed." otherwise).
+  let url: string;
+  try {
+    url = new URL(rawUrl).toString().replace(/\/$/, "");
+  } catch {
+    throw new Error(
+      "NEXT_PUBLIC_SUPABASE_URL is malformed. It should look like https://xxxxx.supabase.co (no trailing slash or whitespace).",
     );
   }
 

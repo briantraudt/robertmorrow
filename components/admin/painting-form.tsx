@@ -188,7 +188,7 @@ export default function PaintingForm({ mode, painting }: Props) {
           <input
             ref={fileInput}
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept="image/*,.heic,.heif"
             onChange={onFileChange}
             style={{ display: "none" }}
           />
@@ -209,7 +209,7 @@ export default function PaintingForm({ mode, painting }: Props) {
             </button>
           </div>
           <p className="muted" style={{ fontSize: 11, marginTop: 10, lineHeight: 1.5 }}>
-            JPEG, PNG, or WebP. 4MB max. Large photos may fail — resize first.
+            JPEG, PNG, WebP, HEIC, or GIF. 4MB max. Large photos may fail — resize first.
           </p>
         </div>
 

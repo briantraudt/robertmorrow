@@ -20,10 +20,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   try {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!url || !serviceKey) {
+    const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+    if (!rawUrl || !serviceKey) {
       return NextResponse.json({ error: "Supabase not configured." }, { status: 500 });
+    }
+    // Validate URL early so we can give a clearer error than "malformed".
+    let url: string;
+    try {
+      url = new URL(rawUrl).toString().replace(/\/$/, "");
+    } catch {
+      return NextResponse.json(
+        {
+          error:
+            "Supabase URL is malformed. Check NEXT_PUBLIC_SUPABASE_URL in Vercel — it should look like https://xxxxx.supabase.co (no trailing slash, no whitespace).",
+        },
+        { status: 500 },
+      );
     }
 
     const form = await req.formData();
@@ -31,22 +44,27 @@ export async function POST(req: Request) {
     if (!file || !(file instanceof Blob)) {
       return NextResponse.json({ error: "No file uploaded." }, { status: 400 });
     }
-    if (!file.type.startsWith("image/")) {
+    // Accept any image/* MIME, plus HEIC/HEIF which some browsers send with
+    // application/octet-stream when dragged in from Finder.
+    const looksLikeImage =
+      file.type.startsWith("image/") ||
+      /\.(heic|heif|jpe?g|png|webp|gif|avif|tiff?|bmp)$/i.test(
+        (form.get("filename") as string) || "",
+      );
+    if (!looksLikeImage) {
       return NextResponse.json({ error: "File must be an image." }, { status: 400 });
     }
 
-    // Build a unique, hopefully-readable path.
+    // Build a unique, hopefully-readable path. Preserve the original extension
+    // so HEIC uploads stay HEIC, PNG stays PNG, etc.
     const originalName = (form.get("filename") as string) || "painting";
     const safe = originalName
       .toLowerCase()
       .replace(/[^a-z0-9.-]/g, "-")
       .replace(/-+/g, "-");
-    const ext =
-      file.type === "image/png"
-        ? "png"
-        : file.type === "image/webp"
-          ? "webp"
-          : "jpg";
+    const nameExt = safe.match(/\.([a-z0-9]+)$/)?.[1];
+    const typeExt = file.type.split("/")[1]?.replace(/[^a-z0-9]/g, "");
+    const ext = nameExt || typeExt || "jpg";
     const stamp = Date.now();
     const path = `${stamp}-${safe.replace(/\.[^.]+$/, "")}.${ext}`;
 
@@ -54,10 +72,29 @@ export async function POST(req: Request) {
     const supabase = createClient(url, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+    // Fall back to a sensible content-type if the browser didn't send one.
+    const mimeByExt: Record<string, string> = {
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      png: "image/png",
+      webp: "image/webp",
+      gif: "image/gif",
+      avif: "image/avif",
+      heic: "image/heic",
+      heif: "image/heif",
+      tif: "image/tiff",
+      tiff: "image/tiff",
+      bmp: "image/bmp",
+    };
+    const contentType =
+      file.type && file.type.startsWith("image/")
+        ? file.type
+        : mimeByExt[ext] || "application/octet-stream";
+
     const { error: upErr } = await supabase.storage
       .from(BUCKET)
       .upload(path, bytes, {
-        contentType: file.type,
+        contentType,
         upsert: false,
         cacheControl: "31536000",
       });
