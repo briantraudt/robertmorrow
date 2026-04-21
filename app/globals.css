@@ -138,6 +138,12 @@ hr.hairline {
   align-items: center;
   gap: 24px;
 }
+.nav-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  justify-self: start;
+}
 .nav-links {
   display: flex;
   gap: 32px;
@@ -147,6 +153,7 @@ hr.hairline {
   justify-content: flex-end;
   align-items: center;
   gap: 20px;
+  justify-self: end;
 }
 .nav-logo-title { font-size: 26px; }
 .nav-menu-btn {
@@ -155,6 +162,31 @@ hr.hairline {
   justify-content: center;
   padding: 6px;
   color: var(--ink);
+}
+.nav-cart-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  color: var(--ink);
+}
+.nav-cart-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0;
 }
 .nav-menu-backdrop {
   position: fixed;
@@ -183,7 +215,6 @@ hr.hairline {
   .nav-links { display: none; }
   .nav-menu-btn { display: inline-flex; }
   .nav-logo-title { font-size: 20px; }
-  .nav-actions { gap: 14px; }
   .nav-menu-panel { padding: 8px 20px 12px; }
 }
 
