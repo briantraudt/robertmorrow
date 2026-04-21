@@ -58,12 +58,63 @@ const raw: Seed[] = [
   { id: "rm-40", title: "Late Afternoon",          year: 2024, series: "abstract", medium: "Oil on linen",  w: 22, h: 28, price: 660, palette: ["#D4B890","#9E7E48","#EAD8B4","#4A3822"], aspect: 0.785, status: "available" },
 ];
 
-export const SEED_PAINTINGS: Painting[] = raw.map((p) => ({
-  ...p,
-  slug: p.slug ?? slugify(p.title),
-  images: [],
-  note: p.note ?? null,
-}));
+// Public-domain sample images from the Art Institute of Chicago open API
+// (IIIF 2.0 — https://api.artic.edu). Used so the gallery shows real oil
+// paintings even when the site is serving from seed data (no DB).
+const SEED_IMAGES: Record<string, { url: string; alt: string }> = {
+  "rm-01": { url: "https://www.artic.edu/iiif/2/a67c4473-57a4-9807-a94e-1136d3daf876/full/1200,/0/default.jpg", alt: "A Holiday — Edward Henry Potthast (sample image)" },
+  "rm-02": { url: "https://www.artic.edu/iiif/2/f7b2db45-f393-653c-07ef-84319b0cdb92/full/1200,/0/default.jpg", alt: "Croquet Scene — Winslow Homer (sample image)" },
+  "rm-03": { url: "https://www.artic.edu/iiif/2/438fbefa-e576-bd5f-983f-1c9626cd4a60/full/1200,/0/default.jpg", alt: "Lights of Other Days — John Frederick Peto (sample image)" },
+  "rm-04": { url: "https://www.artic.edu/iiif/2/a4bef587-48a4-d186-813d-f297441b1ab3/full/1200,/0/default.jpg", alt: "Mahana no atua — Paul Gauguin (sample image)" },
+  "rm-05": { url: "https://www.artic.edu/iiif/2/c8ee825f-bc8c-c76b-1f05-5d692d9a6b47/full/1200,/0/default.jpg", alt: "The Crucifixion — Francisco de Zurbarán (sample image)" },
+  "rm-06": { url: "https://www.artic.edu/iiif/2/6644829f-f292-c5c4-a73c-0356a6fdbf0d/full/1200,/0/default.jpg", alt: "The Bedroom — Vincent van Gogh (sample image)" },
+  "rm-07": { url: "https://www.artic.edu/iiif/2/48b2de88-ba73-8e19-f448-d1cef4a1c847/full/1200,/0/default.jpg", alt: "The Song of the Lark — Jules Breton (sample image)" },
+  "rm-08": { url: "https://www.artic.edu/iiif/2/7e649536-b186-c3f5-3e6d-0d22d5d798ef/full/1200,/0/default.jpg", alt: "Jacques and Berthe Lipchitz — Amedeo Modigliani (sample image)" },
+  "rm-09": { url: "https://www.artic.edu/iiif/2/aa870b0d-5a1b-660a-6dc6-56c12109cf6e/full/1200,/0/default.jpg", alt: "Landscape with Saint John on Patmos — Nicolas Poussin (sample image)" },
+  "rm-10": { url: "https://www.artic.edu/iiif/2/8534685d-1102-e1e3-e194-94f6e925e8b0/full/1200,/0/default.jpg", alt: "Water Lily Pond — Claude Monet (sample image)" },
+  "rm-11": { url: "https://www.artic.edu/iiif/2/a38e2828-ec6f-ece1-a30f-70243449197b/full/1200,/0/default.jpg", alt: "Stacks of Wheat — Claude Monet (sample image)" },
+  "rm-12": { url: "https://www.artic.edu/iiif/2/72a76270-d6f4-e744-d47b-307873a8e8ff/full/1200,/0/default.jpg", alt: "A City Park — William Merritt Chase (sample image)" },
+  "rm-13": { url: "https://www.artic.edu/iiif/2/0f1cc0e0-e42e-be16-3f71-2022da38cb93/full/1200,/0/default.jpg", alt: "Arrival of the Normandy Train — Claude Monet (sample image)" },
+  "rm-14": { url: "https://www.artic.edu/iiif/2/d4ca6321-8656-3d3f-a362-2ee297b2b813/full/1200,/0/default.jpg", alt: "The Bay of Marseille — Paul Cezanne (sample image)" },
+  "rm-15": { url: "https://www.artic.edu/iiif/2/838d8c33-a3b4-68ea-587b-87ceec2011af/full/1200,/0/default.jpg", alt: "Branch of the Seine near Giverny (Mist) — Claude Monet (sample image)" },
+  "rm-16": { url: "https://www.artic.edu/iiif/2/d33c55db-d036-0e1c-b8fe-4ba5b74efb03/full/1200,/0/default.jpg", alt: "Blasted Tree — Jasper Francis Cropsey (sample image)" },
+  "rm-17": { url: "https://www.artic.edu/iiif/2/b5bc6b66-9e6e-fe57-dcec-fc49e820e904/full/1200,/0/default.jpg", alt: "Improvisation No. 30 — Vasily Kandinsky (sample image)" },
+  "rm-18": { url: "https://www.artic.edu/iiif/2/3dbc5164-36fe-36b0-0213-2198ee309f82/full/1200,/0/default.jpg", alt: "Movement No. 10 — Marsden Hartley (sample image)" },
+  "rm-19": { url: "https://www.artic.edu/iiif/2/f534bce3-4746-cba6-6c46-c37a7c9199fb/full/1200,/0/default.jpg", alt: "Provincetown — Marsden Hartley (sample image)" },
+  "rm-20": { url: "https://www.artic.edu/iiif/2/f0150d21-33ab-f6ea-0d4d-32d459f091fe/full/1200,/0/default.jpg", alt: "On a Balcony — Mary Cassatt (sample image)" },
+  "rm-21": { url: "https://www.artic.edu/iiif/2/d7df2633-3b40-f570-c906-211503a37cde/full/1200,/0/default.jpg", alt: "The Girl by the Window — Edvard Munch (sample image)" },
+  "rm-22": { url: "https://www.artic.edu/iiif/2/18ab0c35-e35c-0216-9afd-f93357920db1/full/1200,/0/default.jpg", alt: "Love of Winter — George Wesley Bellows (sample image)" },
+  "rm-23": { url: "https://www.artic.edu/iiif/2/73a61bab-fcf6-7145-3e29-8edd95212db1/full/1200,/0/default.jpg", alt: "Landscape No. 3, Cash Entry Mines — Marsden Hartley (sample image)" },
+  "rm-24": { url: "https://www.artic.edu/iiif/2/18092196-50ae-3ff1-9205-1b3110e966c3/full/1200,/0/default.jpg", alt: "Distant View of Niagara Falls — Thomas Cole (sample image)" },
+  "rm-25": { url: "https://www.artic.edu/iiif/2/565dd29f-6c02-3f31-3db2-46902059f047/full/1200,/0/default.jpg", alt: "Wounded Lioness — Pierre Andrieu (sample image)" },
+  "rm-26": { url: "https://www.artic.edu/iiif/2/2765aee9-3d78-ec6c-5c66-a1d9dc8173f6/full/1200,/0/default.jpg", alt: "Rocks at Port-Goulphar — Claude Monet (sample image)" },
+  "rm-27": { url: "https://www.artic.edu/iiif/2/db94c894-a24c-c2e0-9db9-0506567a0152/full/1200,/0/default.jpg", alt: "Poppy Field (Giverny) — Claude Monet (sample image)" },
+  "rm-28": { url: "https://www.artic.edu/iiif/2/95be2572-b53d-8e7b-abc9-10eb48d4fa5d/full/1200,/0/default.jpg", alt: "The Beach at Sainte-Adresse — Claude Monet (sample image)" },
+  "rm-29": { url: "https://www.artic.edu/iiif/2/d4bc1723-7cbc-d36d-a9cb-f84553f2a6f6/full/1200,/0/default.jpg", alt: "The Poet's Garden — Vincent van Gogh (sample image)" },
+  "rm-30": { url: "https://www.artic.edu/iiif/2/5f5b4009-7e1c-2e07-8b3e-ae59a3cf9c4c/full/1200,/0/default.jpg", alt: "Adoration of the Magi — Jan van Scorel (sample image)" },
+  "rm-31": { url: "https://www.artic.edu/iiif/2/6f61a6fc-dcd8-e801-0ad8-5f7e561d91b6/full/1200,/0/default.jpg", alt: "Waterloo Bridge, Gray Weather — Claude Monet (sample image)" },
+  "rm-32": { url: "https://www.artic.edu/iiif/2/a34d9d72-c4ec-0750-389e-a01215c9aab0/full/1200,/0/default.jpg", alt: "Pastoral Landscape — Adriaen van de Velde (sample image)" },
+  "rm-33": { url: "https://www.artic.edu/iiif/2/de060306-b5a3-5139-cad9-57e9c274d7c3/full/1200,/0/default.jpg", alt: "Coast of Maine — Winslow Homer (sample image)" },
+  "rm-34": { url: "https://www.artic.edu/iiif/2/12662645-5164-4bb1-cfec-3517a4c9779c/full/1200,/0/default.jpg", alt: "Are They Thinking about the Grape? — François Boucher (sample image)" },
+  "rm-35": { url: "https://www.artic.edu/iiif/2/5888c23a-635f-396a-117b-2223032c0201/full/1200,/0/default.jpg", alt: "Coast Scene, Bathers — James McNeill Whistler (sample image)" },
+  "rm-36": { url: "https://www.artic.edu/iiif/2/50034c7f-ce51-00f1-430e-a6f7efc233fc/full/1200,/0/default.jpg", alt: "Nocturne: Blue and Gold — James McNeill Whistler (sample image)" },
+  "rm-37": { url: "https://www.artic.edu/iiif/2/31f0a9a3-8a0d-44ed-6de8-66142b75c4c0/full/1200,/0/default.jpg", alt: "The Bathers — William Adolphe Bouguereau (sample image)" },
+  "rm-38": { url: "https://www.artic.edu/iiif/2/3527f037-a9b2-9253-1a92-dcd281b54340/full/1200,/0/default.jpg", alt: "Landscape — Théodore Rousseau (sample image)" },
+  "rm-39": { url: "https://www.artic.edu/iiif/2/18dd28cc-ae57-b852-cbc4-d184c6f0555d/full/1200,/0/default.jpg", alt: "Cabin in the Cotton — Horace Pippin (sample image)" },
+  "rm-40": { url: "https://www.artic.edu/iiif/2/6644829f-f292-c5c4-a73c-0356a6fdbf0d/full/1200,/0/default.jpg", alt: "The Bedroom — Vincent van Gogh (sample image)" },
+};
+
+export const SEED_PAINTINGS: Painting[] = raw.map((p) => {
+  const img = SEED_IMAGES[p.id];
+  return {
+    ...p,
+    slug: p.slug ?? slugify(p.title),
+    images: img
+      ? [{ url: img.url, alt: img.alt, is_primary: true, sort_order: 0 }]
+      : [],
+    note: p.note ?? null,
+  };
+});
 
 export function findPainting(idOrSlug: string): Painting | undefined {
   return SEED_PAINTINGS.find(
