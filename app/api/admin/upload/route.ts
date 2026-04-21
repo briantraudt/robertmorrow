@@ -20,9 +20,9 @@ export const maxDuration = 30;
 
 const BUCKET = "paintings";
 // How tolerant the trim is to slight variation in the border color (0–100).
-// Higher = more aggressive trimming. Wall photos often have small gradients
-// from lighting, so we need some slack but not enough to eat into paint.
-const TRIM_THRESHOLD = 15;
+// Higher = more aggressive trimming. Wall photos have meaningful gradients
+// from ambient lighting, so we need generous slack to catch the full border.
+const TRIM_THRESHOLD = 40;
 // Cap the stored image's long edge. Keeps uploads reasonable and the
 // gallery fast without losing detail on a 24" monitor.
 const MAX_EDGE = 2200;
@@ -69,6 +69,11 @@ export async function POST(req: Request) {
     let width: number | undefined;
     let height: number | undefined;
     try {
+      // Get the pre-trim size so we can tell in logs whether trimming did
+      // anything at all.
+      const meta = await sharp(inputBytes, { failOn: "none" })
+        .rotate()
+        .metadata();
       const pipeline = sharp(inputBytes, { failOn: "none" })
         .rotate() // respect EXIF orientation (iPhone photos)
         .trim({ threshold: TRIM_THRESHOLD }) // strip uniform wall/paper borders
@@ -84,6 +89,9 @@ export async function POST(req: Request) {
       processed = out.data;
       width = out.info.width;
       height = out.info.height;
+      console.log(
+        `[upload] rotated ${meta.width}x${meta.height} → trimmed+resized ${out.info.width}x${out.info.height} (threshold ${TRIM_THRESHOLD}, trimOffset: ${JSON.stringify(out.info.trimOffsetLeft ?? null)},${JSON.stringify(out.info.trimOffsetTop ?? null)})`,
+      );
     } catch (e) {
       // Sharp couldn't decode (rare — mostly exotic HEIC variants on some
       // platforms). Fall back to the raw bytes.
