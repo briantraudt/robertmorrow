@@ -3,6 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+const links: { href: string; label: string }[] = [
+  { href: "/about", label: "About the artist" },
+  { href: "/contact", label: "Contact" },
+  { href: "/contact?subject=Commission", label: "Commissions" },
+  { href: "/policies/shipping", label: "Shipping" },
+  { href: "/policies/returns", label: "Returns" },
+  { href: "/policies/care", label: "Care & handling" },
+];
+
 export default function Footer() {
   const pathname = usePathname() || "/";
   // Hide footer on admin routes (except the public token-auth offer approval page).
@@ -13,18 +22,17 @@ export default function Footer() {
     <footer
       style={{
         borderTop: "1px solid var(--line)",
-        padding: "64px 48px 40px",
+        padding: "56px 48px 36px",
         background: "var(--paper-2)",
       }}
     >
       <div
-        className="footer-grid"
         style={{
           maxWidth: 1440,
           margin: "0 auto",
-          display: "grid",
-          gridTemplateColumns: "2fr 1fr 1fr 1fr",
-          gap: 48,
+          display: "flex",
+          flexDirection: "column",
+          gap: 32,
         }}
       >
         <div>
@@ -36,38 +44,38 @@ export default function Footer() {
             style={{
               fontSize: 13,
               marginTop: 10,
-              maxWidth: 320,
+              maxWidth: 520,
               lineHeight: 1.7,
             }}
           >
-            Small oil paintings, made slowly in a converted barn in southern New
-            Hampshire. Shipped by the artist himself.
+            Small oil paintings, made slowly in a converted barn in Texas.
+            Shipped by the artist himself.
           </div>
         </div>
 
-        <FooterCol title="Shop">
-          <Link href="/">All paintings</Link>
-          <Link href="/?series=abstract">Abstract</Link>
-          <Link href="/?series=nature">Nature</Link>
-        </FooterCol>
-
-        <FooterCol title="Studio">
-          <Link href="/about">About the artist</Link>
-          <Link href="/contact">Contact</Link>
-          <Link href="/contact?subject=Commission">Commissions</Link>
-        </FooterCol>
-
-        <FooterCol title="Policies">
-          <Link href="/policies/shipping">Shipping</Link>
-          <Link href="/policies/returns">Returns</Link>
-          <Link href="/policies/care">Care &amp; handling</Link>
-        </FooterCol>
+        <nav
+          aria-label="Footer"
+          className="footer-links"
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "12px 28px",
+            fontSize: 13,
+            color: "var(--ink-2)",
+          }}
+        >
+          {links.map((l) => (
+            <Link key={l.href} href={l.href}>
+              {l.label}
+            </Link>
+          ))}
+        </nav>
       </div>
 
       <div
         style={{
           maxWidth: 1440,
-          margin: "48px auto 0",
+          margin: "40px auto 0",
           paddingTop: 24,
           borderTop: "1px solid var(--line)",
           display: "flex",
@@ -79,30 +87,11 @@ export default function Footer() {
           letterSpacing: "0.05em",
         }}
       >
-        <div>© {new Date().getFullYear()} Robert Morrow. All works copyrighted to the artist.</div>
-        <div>Made with care in New Hampshire.</div>
+        <div>
+          © {new Date().getFullYear()} Robert Morrow. All works copyrighted to the artist.
+        </div>
+        <div>Made with care in Texas.</div>
       </div>
     </footer>
-  );
-}
-
-function FooterCol({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <div className="small-caps" style={{ fontSize: 10.5, marginBottom: 16 }}>
-        {title}
-      </div>
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 10,
-          fontSize: 13,
-          color: "var(--ink-2)",
-        }}
-      >
-        {children}
-      </div>
-    </div>
   );
 }
