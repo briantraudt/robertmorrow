@@ -156,7 +156,7 @@ async function sendEmail(key: string | undefined, to: string, subject: string, h
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
     body: JSON.stringify({
-      from: "Robert Morrow <robert@robertmorrow.art>",
+      from: "Robert Morrow <robertmorrow@goodbusinesshq.com>",
       to: [to],
       subject,
       html,

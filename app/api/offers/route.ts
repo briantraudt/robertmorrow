@@ -125,7 +125,7 @@ export async function POST(req: Request) {
           authorization: `Bearer ${key}`,
         },
         body: JSON.stringify({
-          from: "Robert Morrow Art <offers@robertmorrow.art>",
+          from: "Robert Morrow Art <robertmorrow@goodbusinesshq.com>",
           to: [to],
           reply_to: String(email),
           subject: `Offer — ${painting.title} · $${amount}`,
