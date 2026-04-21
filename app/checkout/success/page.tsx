@@ -1,11 +1,21 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCart } from "@/components/cart-provider";
 
+// useSearchParams requires a Suspense boundary when a page is statically
+// generated. Wrap the real content in <Suspense> and export a tiny shell.
 export default function CheckoutSuccessPage() {
+  return (
+    <Suspense fallback={<SuccessShell />}>
+      <SuccessInner />
+    </Suspense>
+  );
+}
+
+function SuccessInner() {
   const params = useSearchParams();
   const sessionId = params.get("session_id");
   const { clearCart } = useCart();
@@ -15,6 +25,10 @@ export default function CheckoutSuccessPage() {
     clearCart();
   }, [clearCart]);
 
+  return <SuccessShell sessionId={sessionId ?? undefined} />;
+}
+
+function SuccessShell({ sessionId }: { sessionId?: string }) {
   return (
     <section
       style={{
