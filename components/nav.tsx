@@ -27,18 +27,8 @@ export default function Nav() {
         borderBottom: "1px solid var(--line-2)",
       }}
     >
-      <div
-        style={{
-          maxWidth: 1440,
-          margin: "0 auto",
-          padding: "22px 48px",
-          display: "grid",
-          gridTemplateColumns: "1fr auto 1fr",
-          alignItems: "center",
-          gap: 24,
-        }}
-      >
-        <nav style={{ display: "flex", gap: 32 }} aria-label="Primary">
+      <div className="nav-inner">
+        <nav className="nav-links" aria-label="Primary">
           {links.map((l) => {
             const active = l.match(pathname);
             return (
@@ -61,33 +51,19 @@ export default function Nav() {
           })}
         </nav>
 
-        <Link href="/" style={{ textAlign: "center", lineHeight: 1.05 }}>
+        <Link href="/" className="nav-logo" style={{ textAlign: "center", lineHeight: 1.05 }}>
           <div
-            className="serif"
-            style={{ fontSize: 26, fontWeight: 400, letterSpacing: "0.02em" }}
+            className="serif nav-logo-title"
+            style={{ fontWeight: 400, letterSpacing: "0.02em" }}
           >
             Robert Morrow
           </div>
-          <div className="micro muted" style={{ marginTop: 4, fontSize: 9 }}>
+          <div className="micro muted nav-logo-sub" style={{ marginTop: 4 }}>
             Paintings · Est. 1968
           </div>
         </Link>
 
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            alignItems: "center",
-            gap: 18,
-          }}
-        >
-          <button
-            className="small-caps muted"
-            style={{ fontSize: 11, letterSpacing: "0.2em" }}
-            aria-label="Search (coming soon)"
-          >
-            Search
-          </button>
+        <div className="nav-actions">
           <button
             onClick={openCart}
             className="small-caps"

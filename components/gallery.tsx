@@ -32,63 +32,12 @@ export default function Gallery({ paintings, initialSeries = "all" }: Props) {
 
   return (
     <section>
-      <div style={{ maxWidth: 1440, margin: "0 auto", padding: "72px 48px 40px" }}>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr auto",
-            alignItems: "end",
-            gap: 40,
-            paddingBottom: 28,
-            borderBottom: "1px solid var(--line)",
-          }}
-        >
-          <div>
-            <div className="micro muted" style={{ marginBottom: 14 }}>
-              Catalog · Spring 2026
-            </div>
-            <h1
-              className="serif"
-              style={{
-                fontSize: "clamp(40px, 5vw, 64px)",
-                fontWeight: 400,
-                lineHeight: 1.05,
-                letterSpacing: "-0.015em",
-                maxWidth: 820,
-              }}
-            >
-              Forty small paintings,{" "}
-              <span className="italic muted">available for purchase.</span>
-            </h1>
-            <p
-              className="muted"
-              style={{ marginTop: 18, maxWidth: 540, fontSize: 14.5, lineHeight: 1.7 }}
-            >
-              Oil on linen and panel. Most works are studio-painted from field studies
-              and sketches. Each piece ships flat-packed and unframed from New Hampshire.
-            </p>
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <div className="serif italic muted" style={{ fontSize: 15 }}>
-              {visible.length} {visible.length === 1 ? "work" : "works"}
-            </div>
-          </div>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: "22px 0 0",
-            gap: 24,
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ display: "flex", gap: 28 }}>
+      <div className="gallery-controls">
+        <div className="gallery-controls-inner">
+          <div className="gallery-filters">
             {(
               [
-                ["all", "All works", counts.all],
+                ["all", "All", counts.all],
                 ["abstract", "Abstract", counts.abstract],
                 ["nature", "Nature", counts.nature],
               ] as const
@@ -153,8 +102,8 @@ export default function Gallery({ paintings, initialSeries = "all" }: Props) {
         </div>
       </div>
 
-      <div style={{ maxWidth: 1440, margin: "0 auto", padding: "12px 48px 120px" }}>
-        <div className="gallery-grid" style={{ columnCount: 3, columnGap: 48 }}>
+      <div className="gallery-wrap">
+        <div className="gallery-grid">
           {visible.map((p, i) => (
             <GalleryCard key={p.id} painting={p} index={i} onOpen={() => openDetail(p)} />
           ))}
@@ -175,14 +124,13 @@ function GalleryCard({
 }) {
   const [hover, setHover] = useState(false);
   const sold = painting.status === "sold";
-  const offset = index % 3 === 1 ? 32 : index % 3 === 2 ? 64 : 0;
 
   return (
     <div
+      className="gallery-card"
       style={{
         breakInside: "avoid",
-        marginBottom: 80,
-        marginTop: index < 3 ? offset : 0,
+        marginBottom: 64,
       }}
     >
       <Link
