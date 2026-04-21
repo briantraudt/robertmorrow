@@ -209,7 +209,7 @@ export default function PaintingForm({ mode, painting }: Props) {
             </button>
           </div>
           <p className="muted" style={{ fontSize: 11, marginTop: 10, lineHeight: 1.5 }}>
-            JPEG, PNG, WebP, HEIC, or GIF. 4MB max. Large photos may fail — resize first.
+            JPEG, PNG, WebP, or HEIC — wall borders are auto-trimmed on upload. 4MB max.
           </p>
         </div>
 

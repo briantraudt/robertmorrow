@@ -1,19 +1,31 @@
 // =======================================================================
 // POST /api/admin/upload — multipart form upload → Supabase Storage
 //
-// Returns { url, path, width, height } on success. Max ~4 MB on Vercel
-// Hobby; larger uploads should be resized on the client first.
+// Accepts any common image type (JPEG/PNG/WebP/HEIC/GIF/TIFF/AVIF/BMP),
+// auto-rotates via EXIF, trims uniform wall/paper borders around the
+// painting, resizes to a sensible max width, and re-encodes to JPEG so the
+// gallery renders consistently across browsers (HEIC is not supported on
+// Chrome/Firefox/Windows).
+//
+// Returns { url, path, width, height }. Max ~4 MB on Vercel Hobby.
 // =======================================================================
 
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import sharp from "sharp";
 import { isAdmin } from "@/lib/admin-auth";
 
 export const runtime = "nodejs";
-// Increase body size limit for this route (still bounded by Vercel).
 export const maxDuration = 30;
 
 const BUCKET = "paintings";
+// How tolerant the trim is to slight variation in the border color (0–100).
+// Higher = more aggressive trimming. Wall photos often have small gradients
+// from lighting, so we need some slack but not enough to eat into paint.
+const TRIM_THRESHOLD = 15;
+// Cap the stored image's long edge. Keeps uploads reasonable and the
+// gallery fast without losing detail on a 24" monitor.
+const MAX_EDGE = 2200;
 
 export async function POST(req: Request) {
   if (!isAdmin()) {
@@ -25,7 +37,6 @@ export async function POST(req: Request) {
     if (!rawUrl || !serviceKey) {
       return NextResponse.json({ error: "Supabase not configured." }, { status: 500 });
     }
-    // Validate URL early so we can give a clearer error than "malformed".
     let url: string;
     try {
       url = new URL(rawUrl).toString().replace(/\/$/, "");
@@ -44,56 +55,60 @@ export async function POST(req: Request) {
     if (!file || !(file instanceof Blob)) {
       return NextResponse.json({ error: "No file uploaded." }, { status: 400 });
     }
-    // Accept any image/* MIME, plus HEIC/HEIF which some browsers send with
-    // application/octet-stream when dragged in from Finder.
+    const originalName = (form.get("filename") as string) || "painting";
     const looksLikeImage =
       file.type.startsWith("image/") ||
-      /\.(heic|heif|jpe?g|png|webp|gif|avif|tiff?|bmp)$/i.test(
-        (form.get("filename") as string) || "",
-      );
+      /\.(heic|heif|jpe?g|png|webp|gif|avif|tiff?|bmp)$/i.test(originalName);
     if (!looksLikeImage) {
       return NextResponse.json({ error: "File must be an image." }, { status: 400 });
     }
 
-    // Build a unique, hopefully-readable path. Preserve the original extension
-    // so HEIC uploads stay HEIC, PNG stays PNG, etc.
-    const originalName = (form.get("filename") as string) || "painting";
+    // ---- Normalize / trim / resize with sharp -----------------------------
+    const inputBytes = Buffer.from(await file.arrayBuffer());
+    let processed: Buffer;
+    let width: number | undefined;
+    let height: number | undefined;
+    try {
+      const pipeline = sharp(inputBytes, { failOn: "none" })
+        .rotate() // respect EXIF orientation (iPhone photos)
+        .trim({ threshold: TRIM_THRESHOLD }) // strip uniform wall/paper borders
+        .resize({
+          width: MAX_EDGE,
+          height: MAX_EDGE,
+          fit: "inside",
+          withoutEnlargement: true,
+        })
+        .jpeg({ quality: 88, mozjpeg: true });
+
+      const out = await pipeline.toBuffer({ resolveWithObject: true });
+      processed = out.data;
+      width = out.info.width;
+      height = out.info.height;
+    } catch (e) {
+      // Sharp couldn't decode (rare — mostly exotic HEIC variants on some
+      // platforms). Fall back to the raw bytes.
+      console.warn("[api/admin/upload] sharp failed, uploading raw:", e);
+      processed = inputBytes;
+    }
+
+    // ---- Build path and upload -------------------------------------------
     const safe = originalName
       .toLowerCase()
       .replace(/[^a-z0-9.-]/g, "-")
-      .replace(/-+/g, "-");
-    const nameExt = safe.match(/\.([a-z0-9]+)$/)?.[1];
-    const typeExt = file.type.split("/")[1]?.replace(/[^a-z0-9]/g, "");
-    const ext = nameExt || typeExt || "jpg";
+      .replace(/-+/g, "-")
+      .replace(/\.[^.]+$/, "");
+    const ext = processed === inputBytes ? (originalName.match(/\.([a-z0-9]+)$/i)?.[1] || "jpg") : "jpg";
     const stamp = Date.now();
-    const path = `${stamp}-${safe.replace(/\.[^.]+$/, "")}.${ext}`;
+    const path = `${stamp}-${safe}.${ext}`;
 
-    const bytes = new Uint8Array(await file.arrayBuffer());
+    const contentType = ext === "jpg" || ext === "jpeg" ? "image/jpeg" : file.type || "application/octet-stream";
+
     const supabase = createClient(url, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    // Fall back to a sensible content-type if the browser didn't send one.
-    const mimeByExt: Record<string, string> = {
-      jpg: "image/jpeg",
-      jpeg: "image/jpeg",
-      png: "image/png",
-      webp: "image/webp",
-      gif: "image/gif",
-      avif: "image/avif",
-      heic: "image/heic",
-      heif: "image/heif",
-      tif: "image/tiff",
-      tiff: "image/tiff",
-      bmp: "image/bmp",
-    };
-    const contentType =
-      file.type && file.type.startsWith("image/")
-        ? file.type
-        : mimeByExt[ext] || "application/octet-stream";
-
     const { error: upErr } = await supabase.storage
       .from(BUCKET)
-      .upload(path, bytes, {
+      .upload(path, processed, {
         contentType,
         upsert: false,
         cacheControl: "31536000",
@@ -104,7 +119,7 @@ export async function POST(req: Request) {
       data: { publicUrl },
     } = supabase.storage.from(BUCKET).getPublicUrl(path);
 
-    return NextResponse.json({ ok: true, url: publicUrl, path });
+    return NextResponse.json({ ok: true, url: publicUrl, path, width, height });
   } catch (err) {
     console.error("[api/admin/upload]", err);
     const message = err instanceof Error ? err.message : "Server error";
