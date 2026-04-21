@@ -31,26 +31,14 @@ export default function Footer() {
           maxWidth: 1440,
           margin: "0 auto",
           display: "flex",
-          flexDirection: "column",
-          gap: 32,
+          flexWrap: "wrap",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "20px 40px",
         }}
       >
-        <div>
-          <div className="serif" style={{ fontSize: 26, fontWeight: 400 }}>
-            Robert Morrow
-          </div>
-          <div
-            className="muted"
-            style={{
-              fontSize: 13,
-              marginTop: 10,
-              maxWidth: 520,
-              lineHeight: 1.7,
-            }}
-          >
-            Small oil paintings, made slowly in a converted barn in Texas.
-            Shipped by the artist himself.
-          </div>
+        <div className="serif" style={{ fontSize: 26, fontWeight: 400 }}>
+          Robert Morrow
         </div>
 
         <nav
