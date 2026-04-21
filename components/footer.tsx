@@ -1,6 +1,14 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export default function Footer() {
+  const pathname = usePathname() || "/";
+  // Hide footer on admin routes (except the public token-auth offer approval page).
+  if (pathname.startsWith("/admin") && !pathname.startsWith("/admin/offers/")) {
+    return null;
+  }
   return (
     <footer
       style={{

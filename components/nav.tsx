@@ -30,6 +30,12 @@ export default function Nav() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // Hide site nav on admin routes (except the token-auth offer approval page,
+  // which lives at /admin/offers/[token] and is shown to buyers, not the admin).
+  if (pathname.startsWith("/admin") && !pathname.startsWith("/admin/offers/")) {
+    return null;
+  }
+
   return (
     <header
       style={{
