@@ -138,6 +138,10 @@ hr.hairline {
   align-items: center;
   gap: 24px;
 }
+.nav-links {
+  display: flex;
+  gap: 32px;
+}
 .nav-actions {
   display: flex;
   justify-content: flex-end;
@@ -146,7 +150,7 @@ hr.hairline {
 }
 .nav-logo-title { font-size: 26px; }
 .nav-menu-btn {
-  display: inline-flex;
+  display: none;
   align-items: center;
   justify-content: center;
   padding: 6px;
@@ -176,6 +180,8 @@ hr.hairline {
     padding: 14px 20px;
     gap: 12px;
   }
+  .nav-links { display: none; }
+  .nav-menu-btn { display: inline-flex; }
   .nav-logo-title { font-size: 20px; }
   .nav-actions { gap: 14px; }
   .nav-menu-panel { padding: 8px 20px 12px; }
@@ -192,8 +198,6 @@ hr.hairline {
   justify-content: flex-end;
   align-items: center;
   gap: 24px;
-  padding-bottom: 18px;
-  border-bottom: 1px solid var(--line);
 }
 .gallery-wrap {
   max-width: 1440px;

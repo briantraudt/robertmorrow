@@ -44,8 +44,28 @@ export default function Nav() {
       }}
     >
       <div className="nav-inner">
-        {/* left spacer for balanced centering */}
-        <div aria-hidden />
+        <nav className="nav-links" aria-label="Primary">
+          {links.map((l) => {
+            const active = l.match(pathname);
+            return (
+              <Link
+                key={l.href}
+                href={l.href}
+                className="small-caps"
+                style={{
+                  color: active ? "var(--ink)" : "var(--ink-3)",
+                  fontSize: 11,
+                  letterSpacing: "0.2em",
+                  borderBottom: active ? "1px solid var(--ink)" : "1px solid transparent",
+                  paddingBottom: 2,
+                  transition: "color .2s, border-color .2s",
+                }}
+              >
+                {l.label}
+              </Link>
+            );
+          })}
+        </nav>
 
         <Link href="/" className="nav-logo" style={{ textAlign: "center", lineHeight: 1.05 }}>
           <div
