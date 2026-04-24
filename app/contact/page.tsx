@@ -75,8 +75,7 @@ export default function ContactPage({
               Response time
             </div>
             <p style={{ fontSize: 14, lineHeight: 1.7 }}>
-              Robert reads mail most mornings with coffee. Expect a reply within
-              two or three days.
+              Expect a reply within 1-2 days.
             </p>
           </div>
         </aside>
