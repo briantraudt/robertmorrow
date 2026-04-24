@@ -54,23 +54,8 @@ export default function ContactForm({
           Thank you, your note is on its way.
         </div>
         <p className="muted" style={{ lineHeight: 1.7 }}>
-          Robert usually replies within a few days. If it&apos;s urgent, do call.
+          Robert usually replies within 1-2 days.
         </p>
-        <button
-          onClick={() => {
-            setSent(false);
-            setForm({ name: "", email: "", subject: defaultSubject, message: "" });
-          }}
-          className="small-caps"
-          style={{
-            marginTop: 24,
-            fontSize: 11,
-            textDecoration: "underline",
-            textUnderlineOffset: 3,
-          }}
-        >
-          Send another
-        </button>
       </div>
     );
   }
