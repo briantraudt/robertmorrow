@@ -31,32 +31,22 @@ export default function AboutSection() {
           <div
             style={{
               aspectRatio: "4 / 5",
-              background: "linear-gradient(140deg, #D8CCB4, #8E7A58 60%, #4A3E28)",
+              background: "var(--paper-2)",
               position: "relative",
+              overflow: "hidden",
             }}
-            aria-label="Placeholder portrait of the artist"
           >
-            <div
+            <img
+              src="/about/robert-morrow.jpg"
+              alt="Robert Morrow"
               style={{
                 position: "absolute",
                 inset: 0,
-                backgroundImage:
-                  "repeating-linear-gradient(45deg, rgba(0,0,0,0.06) 0, rgba(0,0,0,0.06) 1px, transparent 1px, transparent 9px)",
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
               }}
             />
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                display: "flex",
-                alignItems: "flex-end",
-                padding: 24,
-              }}
-            >
-              <div className="micro" style={{ color: "var(--paper)", opacity: 0.85 }}>
-                [ portrait of the artist ]
-              </div>
-            </div>
           </div>
           <div
             className="muted"
