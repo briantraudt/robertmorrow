@@ -143,9 +143,6 @@ export default function Detail({ painting, onClose }: Props) {
             }}
           >
             <div>
-              <div className="micro muted" style={{ marginBottom: 16 }}>
-                №&nbsp;{p.id.replace("rm-", "").padStart(3, "0")}
-              </div>
               <h2
                 className="serif"
                 style={{
@@ -202,7 +199,7 @@ export default function Detail({ painting, onClose }: Props) {
               <dt className="small-caps muted" style={{ fontSize: 10 }}>Framing</dt>
               <dd>Unframed; shipped flat</dd>
               <dt className="small-caps muted" style={{ fontSize: 10 }}>Delivery</dt>
-              <dd>Free · ships within 5 business days</dd>
+              <dd>Free local delivery. Shipping available upon request.</dd>
             </dl>
 
             {p.note && (
