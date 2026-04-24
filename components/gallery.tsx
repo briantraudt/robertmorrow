@@ -41,6 +41,7 @@ function GalleryCard({
 }) {
   const [hover, setHover] = useState(false);
   const sold = painting.status === "sold";
+  const priceLabel = painting.price > 0 ? `$${painting.price}` : "Price on request";
 
   return (
     <div
@@ -120,7 +121,7 @@ function GalleryCard({
               textDecoration: sold ? "line-through" : "none",
             }}
           >
-            ${painting.price}
+            {priceLabel}
           </div>
         </div>
       </Link>

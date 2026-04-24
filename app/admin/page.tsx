@@ -117,7 +117,7 @@ export default async function AdminHome() {
                 <br />
                 {p.w}″ × {p.h}″
               </div>
-              <div className="serif">${p.price}</div>
+              <div className="serif">{p.price > 0 ? `$${p.price}` : "Not set"}</div>
               <div>
                 <StatusPill status={p.status} />
               </div>

@@ -11,6 +11,7 @@ import { IconClose } from "./icons";
 import type { Painting } from "@/lib/types";
 
 export default function MakeOffer({ painting }: { painting: Painting }) {
+  const hasPrice = painting.price > 0;
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
@@ -180,18 +181,27 @@ export default function MakeOffer({ painting }: { painting: Painting }) {
             ) : (
               <form onSubmit={submit} style={{ padding: "28px 32px 32px", display: "flex", flexDirection: "column", gap: 18 }}>
                 <p className="muted" style={{ fontSize: 13, lineHeight: 1.6 }}>
-                  The listed price is{" "}
-                  <span className="serif" style={{ color: "var(--ink)" }}>
-                    ${painting.price}
-                  </span>
-                  . Offers under the asking price are welcome — Robert reads
-                  every one. He&apos;ll reply personally.
+                  {hasPrice ? (
+                    <>
+                      The listed price is{" "}
+                      <span className="serif" style={{ color: "var(--ink)" }}>
+                        ${painting.price}
+                      </span>
+                      . Offers under the asking price are welcome — Robert reads
+                      every one. He&apos;ll reply personally.
+                    </>
+                  ) : (
+                    <>
+                      Robert has not added the final price for this work yet.
+                      Send an offer or inquiry and he&apos;ll reply personally.
+                    </>
+                  )}
                 </p>
                 <OfferField
                   label="Your offer (USD)"
                   value={form.amount}
                   onChange={(v) => set("amount", v.replace(/[^0-9]/g, ""))}
-                  placeholder={`Up to $${painting.price}`}
+                  placeholder={hasPrice ? `Up to $${painting.price}` : "Enter amount"}
                   inputMode="numeric"
                 />
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>

@@ -1,5 +1,5 @@
 // =======================================================================
-// Seed the paintings table from lib/seed-data.ts. Idempotent — safe to re-run.
+// Replace the paintings table from lib/seed-data.ts.
 // Usage: npm run seed
 // Requires NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.local
 // =======================================================================
@@ -24,7 +24,7 @@ const supabase = createClient(url, key, {
 });
 
 async function main() {
-  console.log(`→ Seeding ${SEED_PAINTINGS.length} paintings…`);
+  console.log(`→ Replacing catalog with ${SEED_PAINTINGS.length} paintings…`);
 
   const rows = SEED_PAINTINGS.map((p, i) => ({
     id: p.id,
@@ -43,15 +43,53 @@ async function main() {
     sort_order: i,
   }));
 
-  const { error } = await supabase.from("paintings").upsert(rows, { onConflict: "id" });
+  const { error: imageDeleteError } = await supabase
+    .from("painting_images")
+    .delete()
+    .neq("painting_id", "");
+  if (imageDeleteError) {
+    console.error("✗ Could not clear painting images:", imageDeleteError.message);
+    process.exit(1);
+  }
+
+  const { error: paintingDeleteError } = await supabase
+    .from("paintings")
+    .delete()
+    .neq("id", "");
+  if (paintingDeleteError) {
+    console.error("✗ Could not clear paintings:", paintingDeleteError.message);
+    process.exit(1);
+  }
+
+  const { error } = await supabase.from("paintings").insert(rows);
   if (error) {
     console.error("✗ Seed failed:", error.message);
     process.exit(1);
   }
-  console.log("✓ Done. Paintings upserted.");
-  console.log("");
-  console.log("Next: upload Robert's real photographs to the Supabase `paintings`");
-  console.log("storage bucket, then insert rows into `painting_images` pointing at them.");
+
+  const imageRows = SEED_PAINTINGS.flatMap((p) =>
+    p.images.map((img) => ({
+      painting_id: p.id,
+      url: img.url,
+      alt: img.alt ?? null,
+      width: img.width ?? null,
+      height: img.height ?? null,
+      is_primary: img.is_primary ?? false,
+      sort_order: img.sort_order ?? 0,
+    })),
+  );
+
+  if (imageRows.length) {
+    const { error: imageError } = await supabase
+      .from("painting_images")
+      .insert(imageRows);
+    if (imageError) {
+      console.error("✗ Image seed failed:", imageError.message);
+      process.exit(1);
+    }
+  }
+
+  console.log("✓ Done. Paintings and images replaced.");
 }
 
 main();

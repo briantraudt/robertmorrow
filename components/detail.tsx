@@ -44,6 +44,7 @@ export default function Detail({ painting, onClose }: Props) {
 
   if (!p) return null;
   const sold = p.status === "sold";
+  const hasPrice = p.price > 0;
   const inCart = isInCart(p.id);
 
   return (
@@ -169,7 +170,7 @@ export default function Detail({ painting, onClose }: Props) {
                 textDecoration: sold ? "line-through" : "none",
               }}
             >
-              ${p.price}
+              {hasPrice ? `$${p.price}` : "Price on request"}
             </div>
 
             <hr className="hairline" />
@@ -225,22 +226,24 @@ export default function Detail({ painting, onClose }: Props) {
               }}
             >
               <button
-                disabled={sold}
-                onClick={() => !sold && addToCart(p)}
+                disabled={sold || !hasPrice}
+                onClick={() => !sold && hasPrice && addToCart(p)}
                 className="small-caps"
                 style={{
                   width: "100%",
                   padding: "18px 24px",
-                  background: sold ? "var(--paper-3)" : "var(--ink)",
-                  color: sold ? "var(--ink-3)" : "var(--paper)",
+                  background: sold || !hasPrice ? "var(--paper-3)" : "var(--ink)",
+                  color: sold || !hasPrice ? "var(--ink-3)" : "var(--paper)",
                   fontSize: 11,
                   letterSpacing: "0.22em",
-                  cursor: sold ? "not-allowed" : "pointer",
+                  cursor: sold || !hasPrice ? "not-allowed" : "pointer",
                   transition: "background .2s",
                 }}
               >
                 {sold
                   ? "This work has sold"
+                  : !hasPrice
+                    ? "Price to be added"
                   : inCart
                     ? "Added to cart ✓"
                     : `Add to cart · $${p.price}`}
