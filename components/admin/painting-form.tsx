@@ -124,6 +124,7 @@ export default function PaintingForm({ mode, painting }: Props) {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedFileLabel, setSelectedFileLabel] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
@@ -135,6 +136,8 @@ export default function PaintingForm({ mode, painting }: Props) {
     if (!f) return;
     setFile(f);
     setPreview(URL.createObjectURL(f));
+    setSelectedFileLabel(`${f.name} selected; it will be compressed before upload.`);
+    setError(null);
   }
 
   async function uploadImage(): Promise<string | null> {
@@ -286,8 +289,13 @@ export default function PaintingForm({ mode, painting }: Props) {
             </button>
           </div>
           <p className="muted" style={{ fontSize: 11, marginTop: 10, lineHeight: 1.5 }}>
-            JPEG, PNG, WebP, or HEIC — wall borders are auto-trimmed on upload. 4MB max.
+            JPEG, PNG, WebP, or HEIC — large photos are compressed before upload.
           </p>
+          {selectedFileLabel ? (
+            <p className="muted" style={{ fontSize: 11, marginTop: 8, lineHeight: 1.5 }}>
+              {selectedFileLabel}
+            </p>
+          ) : null}
         </div>
 
         {/* Fields */}
