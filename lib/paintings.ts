@@ -11,6 +11,15 @@ import type { Painting } from "./types";
 
 const SEED_SLUGS = new Set(SEED_PAINTINGS.map((p) => p.slug));
 
+function mergeSeedWithDb(seed: Painting, db?: Partial<Painting>): Painting {
+  if (!db || db.slug !== seed.slug) return seed;
+  return {
+    ...seed,
+    ...db,
+    images: seed.images,
+  };
+}
+
 export async function getPaintings(): Promise<Painting[]> {
   try {
     const supabase = createServerSupabaseClient();
@@ -56,7 +65,11 @@ export async function getPaintings(): Promise<Painting[]> {
 
     const rows = paintingsRes.data ?? [];
     if (rows.length === 0) return SEED_PAINTINGS;
-    if (!rows.some((p) => SEED_SLUGS.has(p.slug))) return SEED_PAINTINGS;
+    const rowsById = new Map(rows.map((p) => [p.id, p as unknown as Partial<Painting>]));
+    const hasOldCatalogRows = rows.some((p) => !SEED_SLUGS.has(p.slug));
+    if (hasOldCatalogRows) {
+      return SEED_PAINTINGS.map((seed) => mergeSeedWithDb(seed, rowsById.get(seed.id)));
+    }
 
     // Group images by painting_id.
     const byPainting = new Map<string, Painting["images"]>();
@@ -121,6 +134,9 @@ export async function getPainting(
     if (painting) {
       if (seedPainting && painting.slug !== seedPainting.slug) {
         return seedPainting;
+      }
+      if (seedPainting) {
+        return mergeSeedWithDb(seedPainting, painting as unknown as Partial<Painting>);
       }
       const { data: images } = await supabase
         .from("painting_images")
