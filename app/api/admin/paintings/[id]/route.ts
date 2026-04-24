@@ -41,7 +41,8 @@ export async function PATCH(
       if (key in body) {
         const v = body[key];
         if (v === "" || v === undefined || v === null) {
-          update[key] = key === "note" ? null : update[key];
+          if (key === "note" || key === "sort_order") update[key] = null;
+          if (key === "year") update[key] = 0;
         } else {
           update[key] =
             ["year", "w", "h", "price", "sort_order"].includes(key)

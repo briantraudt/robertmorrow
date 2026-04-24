@@ -45,9 +45,9 @@ export async function POST(req: Request) {
       imageHeight,
     } = body as Record<string, string | number | undefined>;
 
-    if (!title || !year || !series || !medium || !w || !h || !price) {
+    if (!title || !medium || !w || !h || !price) {
       return NextResponse.json(
-        { error: "Title, year, series, medium, width, height and price are required." },
+        { error: "Title, medium, width, height and price are required." },
         { status: 400 },
       );
     }
@@ -60,8 +60,8 @@ export async function POST(req: Request) {
       id,
       slug,
       title: String(title),
-      year: Number(year),
-      series: String(series),
+      year: year ? Number(year) : 0,
+      series: series ? String(series) : "abstract",
       medium: String(medium),
       w: Number(w),
       h: Number(h),
@@ -76,7 +76,7 @@ export async function POST(req: Request) {
       const { error: imgErr } = await supabase.from("painting_images").insert({
         painting_id: id,
         url: String(imageUrl),
-        alt: `${title}, ${year}`,
+        alt: year ? `${title}, ${year}` : String(title),
         width: imageWidth ? Number(imageWidth) : null,
         height: imageHeight ? Number(imageHeight) : null,
         is_primary: true,

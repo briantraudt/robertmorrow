@@ -14,7 +14,6 @@ type Props = {
 type FormState = {
   title: string;
   year: string;
-  series: "abstract" | "nature";
   medium: string;
   w: string;
   h: string;
@@ -29,8 +28,7 @@ export default function PaintingForm({ mode, painting }: Props) {
   const router = useRouter();
   const [form, setForm] = useState<FormState>(() => ({
     title: painting?.title ?? "",
-    year: painting?.year ? String(painting.year) : String(new Date().getFullYear()),
-    series: (painting?.series as "abstract" | "nature") ?? "abstract",
+    year: painting?.year ? String(painting.year) : "",
     medium: painting?.medium ?? "Oil on linen",
     w: painting?.w ? String(painting.w) : "",
     h: painting?.h ? String(painting.h) : "",
@@ -83,8 +81,8 @@ export default function PaintingForm({ mode, painting }: Props) {
 
       const payload: Record<string, string | number | null> = {
         title: form.title,
-        year: Number(form.year),
-        series: form.series,
+        year: form.year.trim() ? Number(form.year) : 0,
+        series: painting?.series ?? "abstract",
         medium: form.medium,
         w: Number(form.w),
         h: Number(form.h),
@@ -224,27 +222,14 @@ export default function PaintingForm({ mode, painting }: Props) {
             />
           </Field>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
-            <Field label="Year">
-              <input
-                type="number"
-                value={form.year}
-                onChange={(e) => update("year", e.target.value)}
-                required
-                style={inputStyle}
-              />
-            </Field>
-            <Field label="Series">
-              <select
-                value={form.series}
-                onChange={(e) => update("series", e.target.value as "abstract" | "nature")}
-                style={inputStyle}
-              >
-                <option value="abstract">Abstract</option>
-                <option value="nature">Nature</option>
-              </select>
-            </Field>
-          </div>
+          <Field label="Year (optional)">
+            <input
+              type="number"
+              value={form.year}
+              onChange={(e) => update("year", e.target.value)}
+              style={inputStyle}
+            />
+          </Field>
 
           <Field label="Medium">
             <input

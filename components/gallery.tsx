@@ -4,24 +4,18 @@ import { useState } from "react";
 import Link from "next/link";
 import PaintingImage from "./painting-image";
 import { useCart } from "./cart-provider";
-import type { Painting, Series } from "@/lib/types";
+import type { Painting } from "@/lib/types";
 
-type Filter = "all" | Series;
+type Props = { paintings: Painting[] };
 
-type Props = { paintings: Painting[]; initialSeries?: Filter };
-
-export default function Gallery({ paintings, initialSeries = "all" }: Props) {
-  const filter = initialSeries;
+export default function Gallery({ paintings }: Props) {
   const { openDetail } = useCart();
-
-  const visible =
-    filter === "all" ? paintings : paintings.filter((p) => p.series === filter);
 
   return (
     <section>
       <div className="gallery-wrap">
         <div className="gallery-grid">
-          {visible.map((p, i) => (
+          {paintings.map((p, i) => (
             <GalleryCard key={p.id} painting={p} index={i} onOpen={() => openDetail(p)} />
           ))}
         </div>
@@ -42,6 +36,11 @@ function GalleryCard({
   const [hover, setHover] = useState(false);
   const sold = painting.status === "sold";
   const priceLabel = painting.price > 0 ? `$${painting.price}` : "Price on request";
+  const details = [
+    painting.medium,
+    `${painting.w}″ × ${painting.h}″`,
+    painting.year > 0 ? String(painting.year) : null,
+  ].filter(Boolean).join(" · ");
 
   return (
     <div
@@ -110,7 +109,7 @@ function GalleryCard({
               className="muted"
               style={{ fontSize: 12, marginTop: 4, letterSpacing: "0.01em" }}
             >
-              {painting.medium}, {painting.w}″ × {painting.h}″ · {painting.year}
+              {details}
             </div>
           </div>
           <div

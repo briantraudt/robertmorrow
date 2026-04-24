@@ -109,7 +109,7 @@ export default async function AdminHome() {
                   {p.title}
                 </div>
                 <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>
-                  {p.year} · {p.series}
+                  {p.year > 0 ? p.year : "Year not set"}
                 </div>
               </div>
               <div className="muted" style={{ fontSize: 12 }}>

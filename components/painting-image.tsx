@@ -101,7 +101,7 @@ export default function PaintingImage({
       {primary ? (
         <img
           src={primary.url}
-          alt={primary.alt ?? `${painting.title}, ${painting.year}`}
+          alt={primary.alt ?? (painting.year > 0 ? `${painting.title}, ${painting.year}` : painting.title)}
           loading={priority ? "eager" : "lazy"}
           style={{
             position: "absolute",

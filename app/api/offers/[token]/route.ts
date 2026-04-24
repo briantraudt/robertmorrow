@@ -56,7 +56,7 @@ export async function POST(
 
       // Create a one-off product + price and a Payment Link for this offer.
       const product = await stripe.products.create({
-        name: `${painting.title} (${painting.year}) — accepted offer`,
+        name: `${painting.year > 0 ? `${painting.title} (${painting.year})` : painting.title} — accepted offer`,
         metadata: { painting_id: painting.id, offer_id: offer.id },
       });
       const price = await stripe.prices.create({

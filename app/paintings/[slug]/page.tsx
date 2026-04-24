@@ -17,11 +17,12 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const p = await getPainting(params.slug);
   if (!p) return { title: "Painting not found" };
+  const yearSuffix = p.year > 0 ? `, ${p.year}` : "";
   return {
-    title: `${p.title}, ${p.year}`,
+    title: `${p.title}${yearSuffix}`,
     description: `${p.medium}, ${p.w}″ × ${p.h}″. Oil painting by Robert Morrow.`,
     openGraph: {
-      title: `${p.title}, ${p.year} — Robert Morrow`,
+      title: `${p.title}${yearSuffix} — Robert Morrow`,
       images: p.images?.[0]?.url ? [{ url: p.images[0].url }] : undefined,
     },
   };

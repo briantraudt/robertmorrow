@@ -45,6 +45,7 @@ export default function Detail({ painting, onClose }: Props) {
   if (!p) return null;
   const sold = p.status === "sold";
   const hasPrice = p.price > 0;
+  const hasYear = p.year > 0;
   const inCart = isInCart(p.id);
 
   return (
@@ -65,7 +66,7 @@ export default function Detail({ painting, onClose }: Props) {
       }}
       role="dialog"
       aria-modal="true"
-      aria-label={`${p.title}, ${p.year}`}
+      aria-label={hasYear ? `${p.title}, ${p.year}` : p.title}
     >
       <div
         style={{
@@ -143,7 +144,7 @@ export default function Detail({ painting, onClose }: Props) {
           >
             <div>
               <div className="micro muted" style={{ marginBottom: 16 }}>
-                №&nbsp;{p.id.replace("rm-", "").padStart(3, "0")} · {p.series}
+                №&nbsp;{p.id.replace("rm-", "").padStart(3, "0")}
               </div>
               <h2
                 className="serif"
@@ -157,7 +158,7 @@ export default function Detail({ painting, onClose }: Props) {
                 <span className="italic">{p.title}</span>
               </h2>
               <div className="muted" style={{ marginTop: 12, fontSize: 14 }}>
-                Robert Morrow, {p.year}
+                Robert Morrow{hasYear ? `, ${p.year}` : ""}
               </div>
             </div>
 
@@ -190,8 +191,12 @@ export default function Detail({ painting, onClose }: Props) {
               <dd>
                 {p.w}″ × {p.h}″ ({Math.round(p.w * 2.54)} × {Math.round(p.h * 2.54)} cm)
               </dd>
-              <dt className="small-caps muted" style={{ fontSize: 10 }}>Year</dt>
-              <dd>{p.year}</dd>
+              {hasYear && (
+                <>
+                  <dt className="small-caps muted" style={{ fontSize: 10 }}>Year</dt>
+                  <dd>{p.year}</dd>
+                </>
+              )}
               <dt className="small-caps muted" style={{ fontSize: 10 }}>Signed</dt>
               <dd>Lower right, verso inscription</dd>
               <dt className="small-caps muted" style={{ fontSize: 10 }}>Framing</dt>

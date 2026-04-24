@@ -55,7 +55,7 @@ export async function POST(req: Request) {
         currency: "usd",
         unit_amount: p.price * 100,
         product_data: {
-          name: `${p.title} (${p.year})`,
+          name: p.year > 0 ? `${p.title} (${p.year})` : p.title,
           description: `${p.medium}, ${p.w}″ × ${p.h}″`,
           metadata: { painting_id: p.id, slug: p.slug },
         },

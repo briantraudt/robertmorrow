@@ -143,7 +143,7 @@ export default function CartDrawer() {
                         {p.title}
                       </div>
                       <div className="muted" style={{ fontSize: 11.5, marginTop: 4 }}>
-                        {p.w}″ × {p.h}″ · {p.year}
+                        {[`${p.w}″ × ${p.h}″`, p.year > 0 ? String(p.year) : null].filter(Boolean).join(" · ")}
                       </div>
                     </div>
                     <button
