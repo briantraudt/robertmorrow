@@ -6,10 +6,6 @@ import { usePathname } from "next/navigation";
 const links: { href: string; label: string }[] = [
   { href: "/about", label: "About the artist" },
   { href: "/contact", label: "Contact" },
-  { href: "/contact?subject=Commission", label: "Commissions" },
-  { href: "/policies/shipping", label: "Shipping" },
-  { href: "/policies/returns", label: "Returns" },
-  { href: "/policies/care", label: "Care & handling" },
 ];
 
 export default function Footer() {
