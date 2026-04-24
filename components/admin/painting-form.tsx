@@ -24,6 +24,83 @@ type FormState = {
   sort_order: string;
 };
 
+const CLIENT_UPLOAD_MAX_BYTES = 3.75 * 1024 * 1024;
+const CLIENT_IMAGE_MAX_EDGE = 2200;
+const CLIENT_JPEG_QUALITIES = [0.86, 0.76, 0.66];
+
+async function readJson<T extends { error?: string }>(res: Response): Promise<T> {
+  const text = await res.text();
+  if (!text) return {} as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    if (res.status === 413 || /request entity too large/i.test(text)) {
+      throw new Error("That image is too large to upload. Choose a smaller file or export it as a JPEG first.");
+    }
+    throw new Error(text.slice(0, 180) || "Server returned an unreadable response.");
+  }
+}
+
+function loadImage(file: File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Could not read that image. Try exporting it as a JPEG or PNG."));
+    };
+    img.src = url;
+  });
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error("Could not prepare image for upload."));
+      },
+      "image/jpeg",
+      quality,
+    );
+  });
+}
+
+async function prepareUploadFile(file: File): Promise<File> {
+  if (file.size <= CLIENT_UPLOAD_MAX_BYTES && file.type === "image/jpeg") {
+    return file;
+  }
+
+  const img = await loadImage(file);
+  const scale = Math.min(1, CLIENT_IMAGE_MAX_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
+  const width = Math.max(1, Math.round(img.naturalWidth * scale));
+  const height = Math.max(1, Math.round(img.naturalHeight * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Could not prepare image for upload.");
+  ctx.drawImage(img, 0, 0, width, height);
+
+  let best: Blob | null = null;
+  for (const quality of CLIENT_JPEG_QUALITIES) {
+    const blob = await canvasToBlob(canvas, quality);
+    best = blob;
+    if (blob.size <= CLIENT_UPLOAD_MAX_BYTES) break;
+  }
+
+  if (!best || best.size > CLIENT_UPLOAD_MAX_BYTES) {
+    throw new Error("That image is too large to upload. Choose a smaller file or export it as a JPEG first.");
+  }
+
+  const name = file.name.replace(/\.[^.]+$/, "") || "painting";
+  return new File([best], `${name}.jpg`, { type: "image/jpeg" });
+}
+
 export default function PaintingForm({ mode, painting }: Props) {
   const router = useRouter();
   const [form, setForm] = useState<FormState>(() => ({
@@ -62,13 +139,15 @@ export default function PaintingForm({ mode, painting }: Props) {
 
   async function uploadImage(): Promise<string | null> {
     if (!file) return null;
+    const uploadFile = await prepareUploadFile(file);
     const fd = new FormData();
-    fd.append("file", file);
-    fd.append("filename", file.name);
+    fd.append("file", uploadFile);
+    fd.append("filename", uploadFile.name);
     const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
-    const data = await res.json();
+    const data = await readJson<{ error?: string; url?: string }>(res);
     if (!res.ok) throw new Error(data.error || "Upload failed.");
-    return data.url as string;
+    if (!data.url) throw new Error("Upload failed.");
+    return data.url;
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -104,7 +183,7 @@ export default function PaintingForm({ mode, painting }: Props) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await res.json();
+      const data = await readJson<{ error?: string }>(res);
       if (!res.ok) throw new Error(data.error || "Save failed.");
 
       router.push("/admin");
@@ -130,7 +209,7 @@ export default function PaintingForm({ mode, painting }: Props) {
       const res = await fetch(`/api/admin/paintings/${painting.id}`, {
         method: "DELETE",
       });
-      const data = await res.json();
+      const data = await readJson<{ error?: string }>(res);
       if (!res.ok) throw new Error(data.error || "Delete failed.");
       router.push("/admin");
       router.refresh();
