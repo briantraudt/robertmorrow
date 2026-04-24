@@ -14,8 +14,8 @@ export default function AboutSection() {
           maxWidth: 900,
         }}
       >
-        Robert has been painting, <span className="italic">quietly,</span> for
-        most of his life.
+        Robert Morrow paints from the Hill Country, with one eye toward the
+        mountains.
       </h1>
 
       <div
@@ -74,26 +74,32 @@ export default function AboutSection() {
               color: "var(--ink-2)",
             }}
           >
-            These are small paintings, made slowly. I don't paint for a living
-            — I paint to look carefully at things. After fifty years of doing
-            that, it seemed time to let some of them go.
+            These paintings come out of long looking: the dry light of Central
+            Texas, the high-country air of New Mexico, and the quiet discipline
+            of returning to the same questions over time.
           </p>
           <p>
-            Robert Morrow was born in 1946 and has lived most of his life in
-            southern New Hampshire. He studied drawing at the Museum School in
-            Boston, then spent his working years as a carpenter and
-            cabinetmaker — painting, always, on weekends and in winters.
+            Robert Morrow lives and works in Spicewood, Texas, west of Austin
+            in the Hill Country. His paintings are rooted in that landscape:
+            limestone, scrub oak, hard sun, open water, and the shifting color
+            of the Texas sky.
           </p>
           <p>
-            He works in oil, primarily on linen and small birch panels. The
-            subjects come from walks, from half-remembered rooms, from the
-            backs of envelopes. Most are painted in a converted barn behind
-            the house.
+            Each summer, Robert spends time in Cloudcroft, New Mexico, where
+            the Sacramento Mountains offer a different kind of light and
+            distance. Many of the landscapes begin there, from mountain roads,
+            tree lines, weather, and the sudden changes between shadow and sun.
           </p>
           <p>
-            Each painting is signed on the front and inscribed on the back
-            with its title, date, and number. Works ship flat-packed and
-            unframed unless you write to ask otherwise.
+            Robert studied art in California and has continued painting
+            steadily for decades. He works primarily in oil, building small
+            compositions through color, memory, and observation rather than
+            strict description.
+          </p>
+          <p>
+            The works are signed on the front and inscribed on the back with
+            title, date, and number. They ship flat-packed and unframed unless
+            you write to ask otherwise.
           </p>
 
           <div
@@ -108,7 +114,7 @@ export default function AboutSection() {
             }}
           >
             <Stat n="50+" label="Years painting" />
-            <Stat n="New Hampshire" label="Working from" />
+            <Stat n="Spicewood, TX" label="Working from" />
             <Stat n="Oil" label="Primary medium" />
           </div>
         </div>
