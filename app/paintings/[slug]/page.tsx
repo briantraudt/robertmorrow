@@ -20,7 +20,7 @@ export async function generateMetadata({
   const yearSuffix = p.year > 0 ? `, ${p.year}` : "";
   return {
     title: `${p.title}${yearSuffix}`,
-    description: `${p.medium}, ${p.w}″ × ${p.h}″. Oil painting by Robert Morrow.`,
+    description: `${p.medium}, ${p.w}″ × ${p.h}″. Painting by Robert Morrow.`,
     openGraph: {
       title: `${p.title}${yearSuffix} — Robert Morrow`,
       images: p.images?.[0]?.url ? [{ url: p.images[0].url }] : undefined,

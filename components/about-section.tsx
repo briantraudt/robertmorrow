@@ -92,9 +92,9 @@ export default function AboutSection() {
           </p>
           <p>
             Robert studied art in California and has continued painting
-            steadily for decades. He works primarily in oil, building small
-            compositions through color, memory, and observation rather than
-            strict description.
+            steadily for decades. He works primarily in acrylic on canvas,
+            building small compositions through color, memory, and observation
+            rather than strict description.
           </p>
           <p>
             The works are signed on the front and inscribed on the back with
@@ -115,7 +115,7 @@ export default function AboutSection() {
           >
             <Stat n="50+" label="Years painting" />
             <Stat n="Spicewood, TX" label="Working from" />
-            <Stat n="Oil" label="Primary medium" />
+            <Stat n="Acrylic" label="Primary medium" />
           </div>
         </div>
       </div>

@@ -106,7 +106,7 @@ export default function PaintingForm({ mode, painting }: Props) {
   const [form, setForm] = useState<FormState>(() => ({
     title: painting?.title ?? "",
     year: painting?.year ? String(painting.year) : "",
-    medium: painting?.medium ?? "Oil on linen",
+    medium: painting?.medium ?? "Acrylic on canvas",
     w: painting?.w ? String(painting.w) : "",
     h: painting?.h ? String(painting.h) : "",
     price: painting?.price ? String(painting.price) : "",
@@ -323,7 +323,7 @@ export default function PaintingForm({ mode, painting }: Props) {
               value={form.medium}
               onChange={(e) => update("medium", e.target.value)}
               required
-              placeholder="Oil on linen"
+              placeholder="Acrylic on canvas"
               style={inputStyle}
             />
           </Field>

@@ -16,11 +16,11 @@ export const metadata: Metadata = {
     template: "%s · Robert Morrow",
   },
   description:
-    "Small oil paintings, made slowly in a converted barn in southern New Hampshire.",
+    "Acrylic paintings by Robert Morrow, rooted in Spicewood, Texas, and the landscapes around Cloudcroft, New Mexico.",
   openGraph: {
     title: "Robert Morrow — Paintings",
     description:
-      "Small oil paintings, made slowly in a converted barn in southern New Hampshire.",
+      "Acrylic paintings by Robert Morrow, rooted in Spicewood, Texas, and the landscapes around Cloudcroft, New Mexico.",
     url: siteUrl,
     siteName: "Robert Morrow",
     type: "website",

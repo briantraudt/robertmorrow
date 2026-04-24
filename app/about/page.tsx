@@ -4,7 +4,7 @@ import AboutSection from "@/components/about-section";
 export const metadata: Metadata = {
   title: "About the artist",
   description:
-    "Robert Morrow paints small oil paintings, slowly, in a converted barn in southern New Hampshire.",
+    "Robert Morrow paints acrylic works rooted in Spicewood, Texas, and the Cloudcroft, New Mexico, landscapes that inspire many of them.",
 };
 
 export default function AboutPage() {
