@@ -57,9 +57,9 @@ export default function ContactPage({
               Studio
             </div>
             <div className="serif" style={{ fontSize: 18, lineHeight: 1.5 }}>
-              The old barn behind the house
+              Spicewood, TX
               <br />
-              Southern New Hampshire
+              Cloudcroft, NM
             </div>
           </div>
           <div>
@@ -67,9 +67,7 @@ export default function ContactPage({
               Direct
             </div>
             <div className="serif" style={{ fontSize: 18, lineHeight: 1.5 }}>
-              robert<span className="muted">@</span>robertmorrow.art
-              <br />
-              <span className="muted" style={{ fontSize: 14 }}>(603) 555·0118</span>
+              robertmorrow2<span className="muted">@</span>verizon.net
             </div>
           </div>
           <div>
