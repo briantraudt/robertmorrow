@@ -9,6 +9,8 @@ import { createServerSupabaseClient } from "./supabase/server";
 import { SEED_PAINTINGS, findPainting as seedFind } from "./seed-data";
 import type { Painting } from "./types";
 
+const SEED_SLUGS = new Set(SEED_PAINTINGS.map((p) => p.slug));
+
 export async function getPaintings(): Promise<Painting[]> {
   try {
     const supabase = createServerSupabaseClient();
@@ -54,6 +56,7 @@ export async function getPaintings(): Promise<Painting[]> {
 
     const rows = paintingsRes.data ?? [];
     if (rows.length === 0) return SEED_PAINTINGS;
+    if (!rows.some((p) => SEED_SLUGS.has(p.slug))) return SEED_PAINTINGS;
 
     // Group images by painting_id.
     const byPainting = new Map<string, Painting["images"]>();
@@ -93,6 +96,7 @@ export async function getPaintings(): Promise<Painting[]> {
 export async function getPainting(
   idOrSlug: string,
 ): Promise<Painting | null> {
+  const seedPainting = seedFind(idOrSlug);
   try {
     const supabase = createServerSupabaseClient();
     const { data: painting, error } = await supabase
@@ -115,6 +119,9 @@ export async function getPainting(
       throw error;
     }
     if (painting) {
+      if (seedPainting && painting.slug !== seedPainting.slug) {
+        return seedPainting;
+      }
       const { data: images } = await supabase
         .from("painting_images")
         .select("url, alt, width, height, is_primary, sort_order")
@@ -131,5 +138,5 @@ export async function getPainting(
         : { raw: String(err) };
     console.error("RMDBG getPainting catch:", JSON.stringify(safeErr));
   }
-  return seedFind(idOrSlug) ?? null;
+  return seedPainting ?? null;
 }
