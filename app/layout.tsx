@@ -6,24 +6,53 @@ import Footer from "@/components/footer";
 import CartDrawer from "@/components/cart-drawer";
 import DetailOverlay from "@/components/detail-overlay";
 import Toast from "@/components/toast";
-
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://robertmorrow.art";
+import {
+  absoluteUrl,
+  artistJsonLd,
+  jsonLdScript,
+  seoKeywords,
+  siteDescription,
+  siteName,
+  siteUrl,
+  websiteJsonLd,
+} from "@/lib/seo";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "Robert Morrow — Paintings",
+    default: "Robert Morrow — Texas Acrylic Landscape Paintings",
     template: "%s · Robert Morrow",
   },
-  description:
-    "Acrylic paintings by Robert Morrow, rooted in Spicewood, Texas, and the landscapes around Cloudcroft, New Mexico.",
+  description: siteDescription,
+  keywords: seoKeywords,
+  alternates: {
+    canonical: "/",
+  },
   openGraph: {
-    title: "Robert Morrow — Paintings",
-    description:
-      "Acrylic paintings by Robert Morrow, rooted in Spicewood, Texas, and the landscapes around Cloudcroft, New Mexico.",
+    title: "Robert Morrow — Texas Acrylic Landscape Paintings",
+    description: siteDescription,
     url: siteUrl,
-    siteName: "Robert Morrow",
+    siteName,
     type: "website",
+    locale: "en_US",
+    images: [
+      {
+        url: absoluteUrl("/about/robert-morrow.jpg"),
+        width: 768,
+        height: 992,
+        alt: "Texas artist Robert Morrow",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Robert Morrow — Texas Acrylic Landscape Paintings",
+    description: siteDescription,
+    images: [absoluteUrl("/about/robert-morrow.jpg")],
+  },
+  robots: {
+    index: true,
+    follow: true,
   },
   // Favicon lives at app/icon.svg — Next.js picks it up via file convention.
 };
@@ -41,6 +70,10 @@ export default function RootLayout({
         <link
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Inter:wght@300;400;500;600&display=swap"
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={jsonLdScript([websiteJsonLd(), artistJsonLd()])}
         />
       </head>
       <body>

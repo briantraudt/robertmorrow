@@ -1,9 +1,26 @@
 import type { Metadata } from "next";
 import ContactForm from "@/components/contact-form";
+import { absoluteUrl, seoKeywords } from "@/lib/seo";
 
 export const metadata: Metadata = {
-  title: "Contact",
-  description: "Write to Robert Morrow about a painting, commission, or framing.",
+  title: "Contact Robert Morrow",
+  description:
+    "Contact Texas artist Robert Morrow about available acrylic paintings, local delivery, or shipping for original landscape paintings.",
+  keywords: [
+    ...seoKeywords,
+    "contact Robert Morrow",
+    "buy Texas acrylic painting",
+    "original paintings for sale Texas",
+  ],
+  alternates: {
+    canonical: "/contact",
+  },
+  openGraph: {
+    title: "Contact Robert Morrow",
+    description:
+      "Write to Texas artist Robert Morrow about original acrylic paintings for sale.",
+    url: absoluteUrl("/contact"),
+  },
 };
 
 export default function ContactPage({
@@ -28,8 +45,7 @@ export default function ContactPage({
           maxWidth: 900,
         }}
       >
-        Questions about a painting, <span className="italic">commissions,</span>{" "}
-        or framing — send a note.
+        Questions about a painting, local delivery, or shipping — send a note.
       </h1>
 
       <div
