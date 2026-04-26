@@ -45,6 +45,12 @@ export async function POST(req: Request) {
           { status: 400 },
         );
       }
+      if (p.price <= 0) {
+        return NextResponse.json(
+          { error: `"${p.title}" is not priced for online checkout yet.` },
+          { status: 400 },
+        );
+      }
       resolved.push(p);
     }
 
