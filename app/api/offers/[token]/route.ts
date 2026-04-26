@@ -9,8 +9,44 @@ import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getStripe } from "@/lib/stripe";
 import { getPainting } from "@/lib/paintings";
+import { SEED_PAINTINGS } from "@/lib/seed-data";
 
 export const runtime = "nodejs";
+
+type SupabaseServerClient = ReturnType<typeof createServerSupabaseClient>;
+
+async function insertMissingSeedPainting(
+  supabase: SupabaseServerClient,
+  paintingId: string,
+) {
+  const { data: existing, error: findError } = await supabase
+    .from("paintings")
+    .select("id")
+    .eq("id", paintingId)
+    .maybeSingle();
+  if (findError) throw findError;
+  if (existing) return;
+
+  const seed = SEED_PAINTINGS.find((p) => p.id === paintingId);
+  if (!seed) return;
+
+  const { error } = await supabase.from("paintings").insert({
+    id: seed.id,
+    slug: seed.slug,
+    title: seed.title,
+    year: seed.year,
+    series: seed.series || "abstract",
+    medium: seed.medium,
+    w: seed.w,
+    h: seed.h,
+    price: seed.price,
+    status: seed.status,
+    note: seed.note,
+    palette: seed.palette ?? null,
+    aspect: seed.aspect ?? null,
+  });
+  if (error) throw error;
+}
 
 export async function POST(
   req: Request,
@@ -79,6 +115,7 @@ export async function POST(
         .update({ status: "accepted", internal_note: link.url })
         .eq("id", offer.id);
 
+      await insertMissingSeedPainting(supabase, painting.id);
       await supabase
         .from("paintings")
         .update({ status: "reserved" })
