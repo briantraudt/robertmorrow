@@ -119,7 +119,7 @@ export default function Detail({ painting, onClose }: Props) {
             }}
           >
             <div style={{ width: "100%", maxWidth: 560 }}>
-              <PaintingImage painting={p} priority />
+              <PaintingImage painting={p} priority useGalleryThumb />
               <div
                 className="muted"
                 style={{
