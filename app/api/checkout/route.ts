@@ -65,7 +65,7 @@ export async function POST(req: Request) {
       amount: subtotal * 100,
       currency: "usd",
       receipt_email: email,
-      automatic_payment_methods: { enabled: true },
+      payment_method_types: ["card"],
       description:
         resolved.length === 1
           ? `${resolved[0].title} by Robert Morrow`
