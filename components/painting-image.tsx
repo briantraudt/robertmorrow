@@ -13,6 +13,7 @@ type Props = {
   priority?: boolean;
   className?: string;
   style?: React.CSSProperties;
+  imageFit?: "cover" | "contain";
 };
 
 function seeded(seed: string) {
@@ -29,6 +30,7 @@ export default function PaintingImage({
   priority,
   className,
   style,
+  imageFit = "cover",
 }: Props) {
   const primary = painting.images?.find((i) => i.is_primary) ?? painting.images?.[0];
   const aspect = painting.aspect || painting.w / painting.h;
@@ -108,7 +110,7 @@ export default function PaintingImage({
             inset: 0,
             width: "100%",
             height: "100%",
-            objectFit: "cover",
+            objectFit: imageFit,
           }}
         />
       ) : placeholder ? (

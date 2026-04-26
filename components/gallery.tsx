@@ -69,7 +69,12 @@ function GalleryCard({
             transform: hover ? "translateY(-3px)" : "translateY(0)",
           }}
         >
-          <PaintingImage painting={painting} priority={index < 3} />
+          <PaintingImage
+            painting={painting}
+            priority={index < 3}
+            className="gallery-card-image"
+            imageFit="contain"
+          />
           <div
             style={{
               position: "absolute",
