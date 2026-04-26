@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "seed": "tsx scripts/seed.ts",
-    "seed:images": "tsx scripts/seed-images.ts"
+    "seed:images": "tsx scripts/seed-images.ts",
+    "thumbs": "tsx scripts/generate-gallery-thumbs.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

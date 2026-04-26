@@ -74,6 +74,7 @@ function GalleryCard({
             priority={index < 3}
             className="gallery-card-image"
             imageFit="cover"
+            useGalleryThumb
           />
           <div
             style={{

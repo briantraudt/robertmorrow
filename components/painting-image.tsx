@@ -14,6 +14,7 @@ type Props = {
   className?: string;
   style?: React.CSSProperties;
   imageFit?: "cover" | "contain";
+  useGalleryThumb?: boolean;
 };
 
 function seeded(seed: string) {
@@ -31,9 +32,14 @@ export default function PaintingImage({
   className,
   style,
   imageFit = "cover",
+  useGalleryThumb = false,
 }: Props) {
   const primary = painting.images?.find((i) => i.is_primary) ?? painting.images?.[0];
   const aspect = painting.aspect || painting.w / painting.h;
+  const imageUrl =
+    useGalleryThumb && primary?.url?.startsWith("/paintings/")
+      ? primary.url.replace("/paintings/", "/paintings/thumbs/")
+      : primary?.url;
 
   // Generated placeholder data — memoized so the same painting always looks the same.
   const placeholder = useMemo(() => {
@@ -102,7 +108,7 @@ export default function PaintingImage({
     >
       {primary ? (
         <img
-          src={primary.url}
+          src={imageUrl}
           alt={primary.alt ?? (painting.year > 0 ? `${painting.title}, ${painting.year}` : painting.title)}
           loading={priority ? "eager" : "lazy"}
           style={{
