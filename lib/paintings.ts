@@ -10,6 +10,8 @@ import { SEED_PAINTINGS, findPainting as seedFind } from "./seed-data";
 import type { Painting } from "./types";
 
 const SEED_SLUGS = new Set(SEED_PAINTINGS.map((p) => p.slug));
+const SEED_BY_ID = new Map(SEED_PAINTINGS.map((p) => [p.id, p]));
+const SEED_BY_SLUG = new Map(SEED_PAINTINGS.map((p) => [p.slug, p]));
 const FRAMED_SLUGS = new Set([
   "img-2329",
   "img-2330",
@@ -43,10 +45,19 @@ function sortForGallery(paintings: Painting[]): Painting[] {
 }
 
 function mergeSeedWithDb(seed: Painting, db?: Partial<Painting>): Painting {
-  if (!db || db.slug !== seed.slug) return seed;
+  if (!db) return seed;
   return {
     ...seed,
     ...db,
+    images: db.images?.length ? db.images : seed.images,
+  };
+}
+
+function mergeSeedImagesForList(painting: Painting): Painting {
+  const seed = SEED_BY_ID.get(painting.id) ?? SEED_BY_SLUG.get(painting.slug);
+  if (!seed || painting.images?.length) return painting;
+  return {
+    ...painting,
     images: seed.images,
   };
 }
@@ -112,12 +123,16 @@ export async function getPaintings(): Promise<Painting[]> {
     const rows = paintingsRes.data ?? [];
     if (rows.length === 0) return sortForGallery(SEED_PAINTINGS);
 
-    const dbSlugs = new Set(rows.map((p) => p.slug));
-    const dbPaintings = rows.map((p) => ({
-      ...(p as unknown as Painting),
-      images: byPainting.get(p.id) ?? [],
-    }));
-    const missingSeedPaintings = SEED_PAINTINGS.filter((p) => !dbSlugs.has(p.slug));
+    const dbSeedKeys = new Set(rows.flatMap((p) => [p.id, p.slug]));
+    const dbPaintings = rows.map((p) =>
+      mergeSeedImagesForList({
+        ...(p as unknown as Painting),
+        images: byPainting.get(p.id) ?? [],
+      }),
+    );
+    const missingSeedPaintings = SEED_PAINTINGS.filter(
+      (p) => !dbSeedKeys.has(p.id) && !dbSeedKeys.has(p.slug),
+    );
 
     return sortForGallery([...dbPaintings, ...missingSeedPaintings]);
   } catch (err) {
@@ -162,9 +177,6 @@ export async function getPainting(
       throw error;
     }
     if (painting) {
-      if (seedPainting && painting.slug !== seedPainting.slug) {
-        return seedPainting;
-      }
       if (seedPainting) {
         return mergeSeedWithDb(seedPainting, painting as unknown as Partial<Painting>);
       }
