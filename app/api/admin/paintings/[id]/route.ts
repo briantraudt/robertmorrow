@@ -6,6 +6,7 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { isAdmin } from "@/lib/admin-auth";
+import { findPainting as seedFind } from "@/lib/seed-data";
 import { revalidatePath } from "next/cache";
 
 export const runtime = "nodejs";
@@ -53,11 +54,39 @@ export async function PATCH(
     }
     if (Object.keys(update).length) {
       update["updated_at"] = new Date().toISOString();
-      const { error } = await supabase
+      const { data: updated, error } = await supabase
         .from("paintings")
         .update(update)
-        .eq("id", params.id);
+        .eq("id", params.id)
+        .select("id")
+        .maybeSingle();
       if (error) throw error;
+      if (!updated) {
+        const seed = seedFind(params.id);
+        if (!seed) {
+          return NextResponse.json(
+            { error: "Painting not found." },
+            { status: 404 },
+          );
+        }
+        const { error: insertErr } = await supabase.from("paintings").insert({
+          id: seed.id,
+          slug: seed.slug,
+          title: seed.title,
+          year: seed.year,
+          series: seed.series,
+          medium: seed.medium,
+          w: seed.w,
+          h: seed.h,
+          price: seed.price,
+          status: seed.status,
+          note: seed.note ?? null,
+          palette: seed.palette ?? null,
+          aspect: seed.aspect ?? null,
+          ...update,
+        });
+        if (insertErr) throw insertErr;
+      }
     }
 
     // Optional new primary image.

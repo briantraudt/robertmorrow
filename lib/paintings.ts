@@ -63,14 +63,6 @@ export async function getPaintings(): Promise<Painting[]> {
       // Don't throw — degrade gracefully to paintings-without-images.
     }
 
-    const rows = paintingsRes.data ?? [];
-    if (rows.length === 0) return SEED_PAINTINGS;
-    const rowsById = new Map(rows.map((p) => [p.id, p as unknown as Partial<Painting>]));
-    const hasOldCatalogRows = rows.some((p) => !SEED_SLUGS.has(p.slug));
-    if (hasOldCatalogRows) {
-      return SEED_PAINTINGS.map((seed) => mergeSeedWithDb(seed, rowsById.get(seed.id)));
-    }
-
     // Group images by painting_id.
     const byPainting = new Map<string, Painting["images"]>();
     for (const img of imagesRes.data ?? []) {
@@ -86,10 +78,17 @@ export async function getPaintings(): Promise<Painting[]> {
       byPainting.set(img.painting_id, list);
     }
 
-    return rows.map((p) => ({
+    const rows = paintingsRes.data ?? [];
+    if (rows.length === 0) return SEED_PAINTINGS;
+
+    const dbSlugs = new Set(rows.map((p) => p.slug));
+    const dbPaintings = rows.map((p) => ({
       ...(p as unknown as Painting),
       images: byPainting.get(p.id) ?? [],
     }));
+    const missingSeedPaintings = SEED_PAINTINGS.filter((p) => !dbSlugs.has(p.slug));
+
+    return [...dbPaintings, ...missingSeedPaintings];
   } catch (err) {
     const safeErr =
       err instanceof Error
