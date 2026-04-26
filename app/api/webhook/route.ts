@@ -13,10 +13,50 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { SEED_PAINTINGS } from "@/lib/seed-data";
 
 export const runtime = "nodejs";
 // Next.js doesn't let us access the raw body in a Route Handler by default,
 // so we read text() and hand it to Stripe's signature verifier as-is.
+
+type SupabaseServerClient = ReturnType<typeof createServerSupabaseClient>;
+
+async function insertMissingSeedPaintings(
+  supabase: SupabaseServerClient,
+  paintingIds: string[],
+) {
+  if (!paintingIds.length) return;
+
+  const { data: existing } = await supabase
+    .from("paintings")
+    .select("id")
+    .in("id", paintingIds);
+  const existingIds = new Set((existing ?? []).map((p) => p.id));
+  const missingSeeds = SEED_PAINTINGS.filter(
+    (p) => paintingIds.includes(p.id) && !existingIds.has(p.id),
+  );
+
+  if (!missingSeeds.length) return;
+
+  const { error } = await supabase.from("paintings").insert(
+    missingSeeds.map((p) => ({
+      id: p.id,
+      slug: p.slug,
+      title: p.title,
+      year: p.year,
+      series: p.series || "abstract",
+      medium: p.medium,
+      w: p.w,
+      h: p.h,
+      price: p.price,
+      status: p.status,
+      note: p.note,
+      palette: p.palette ?? null,
+      aspect: p.aspect ?? null,
+    })),
+  );
+  if (error) throw error;
+}
 
 export async function POST(req: Request) {
   const stripe = getStripe();
@@ -66,6 +106,7 @@ export async function POST(req: Request) {
       );
 
       if (paintingIds.length) {
+        await insertMissingSeedPaintings(supabase, paintingIds);
         await supabase
           .from("paintings")
           .update({ status: "sold" })
@@ -73,8 +114,12 @@ export async function POST(req: Request) {
       }
     } catch (err) {
       console.error("[webhook] database write failed", err);
-      // Don't throw — Stripe will retry if we return 5xx, and we don't want
-      // a DB blip to cause duplicate orders on retry.
+      // The order upsert is idempotent, so ask Stripe to retry if we could
+      // not reliably record the sale or mark the painting sold.
+      return NextResponse.json(
+        { error: "Webhook database write failed." },
+        { status: 500 },
+      );
     }
   }
 
