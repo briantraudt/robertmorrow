@@ -157,11 +157,6 @@ export default function Detail({ painting, onClose }: Props) {
               <div className="muted" style={{ marginTop: 12, fontSize: 14 }}>
                 Robert Morrow{hasYear ? `, ${p.year}` : ""}
               </div>
-              <p style={{ marginTop: 18, fontSize: 14, lineHeight: 1.7, color: "var(--ink-2)" }}>
-                Original acrylic painting by Texas artist Robert Morrow,
-                informed by the Hill Country around Spicewood and the mountain
-                landscapes near Cloudcroft, New Mexico.
-              </p>
             </div>
 
             <div
