@@ -73,7 +73,7 @@ function GalleryCard({
             painting={painting}
             priority={index < 3}
             className="gallery-card-image"
-            imageFit="contain"
+            imageFit="cover"
           />
           <div
             style={{

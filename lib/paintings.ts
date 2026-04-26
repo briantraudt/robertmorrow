@@ -20,12 +20,25 @@ const FRAMED_SLUGS = new Set([
   "img-2421",
 ]);
 
-function placeFramedPaintingsLast(paintings: Painting[]): Painting[] {
+function sizeGroup(painting: Painting) {
+  const longSide = Math.max(painting.w, painting.h);
+  const shortSide = Math.min(painting.w, painting.h);
+  return { longSide, shortSide };
+}
+
+function sortForGallery(paintings: Painting[]): Painting[] {
   return [...paintings].sort((a, b) => {
     const aFramed = FRAMED_SLUGS.has(a.slug);
     const bFramed = FRAMED_SLUGS.has(b.slug);
-    if (aFramed === bFramed) return 0;
-    return aFramed ? 1 : -1;
+    if (aFramed !== bFramed) return aFramed ? 1 : -1;
+
+    const aSize = sizeGroup(a);
+    const bSize = sizeGroup(b);
+    if (aSize.longSide !== bSize.longSide) return bSize.longSide - aSize.longSide;
+    if (aSize.shortSide !== bSize.shortSide) return bSize.shortSide - aSize.shortSide;
+    if (a.w !== b.w) return b.w - a.w;
+    if (a.h !== b.h) return b.h - a.h;
+    return a.title.localeCompare(b.title, undefined, { numeric: true });
   });
 }
 
@@ -97,7 +110,7 @@ export async function getPaintings(): Promise<Painting[]> {
     }
 
     const rows = paintingsRes.data ?? [];
-    if (rows.length === 0) return placeFramedPaintingsLast(SEED_PAINTINGS);
+    if (rows.length === 0) return sortForGallery(SEED_PAINTINGS);
 
     const dbSlugs = new Set(rows.map((p) => p.slug));
     const dbPaintings = rows.map((p) => ({
@@ -106,7 +119,7 @@ export async function getPaintings(): Promise<Painting[]> {
     }));
     const missingSeedPaintings = SEED_PAINTINGS.filter((p) => !dbSlugs.has(p.slug));
 
-    return placeFramedPaintingsLast([...dbPaintings, ...missingSeedPaintings]);
+    return sortForGallery([...dbPaintings, ...missingSeedPaintings]);
   } catch (err) {
     const safeErr =
       err instanceof Error
@@ -119,7 +132,7 @@ export async function getPaintings(): Promise<Painting[]> {
       hasAnon: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
       urlStart: process.env.NEXT_PUBLIC_SUPABASE_URL?.slice(0, 30) ?? null,
     }));
-    return SEED_PAINTINGS;
+    return sortForGallery(SEED_PAINTINGS);
   }
 }
 
