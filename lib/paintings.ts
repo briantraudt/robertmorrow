@@ -10,6 +10,24 @@ import { SEED_PAINTINGS, findPainting as seedFind } from "./seed-data";
 import type { Painting } from "./types";
 
 const SEED_SLUGS = new Set(SEED_PAINTINGS.map((p) => p.slug));
+const FRAMED_SLUGS = new Set([
+  "img-2329",
+  "img-2330",
+  "img-2359",
+  "img-2360",
+  "img-2373",
+  "img-2398",
+  "img-2421",
+]);
+
+function placeFramedPaintingsLast(paintings: Painting[]): Painting[] {
+  return [...paintings].sort((a, b) => {
+    const aFramed = FRAMED_SLUGS.has(a.slug);
+    const bFramed = FRAMED_SLUGS.has(b.slug);
+    if (aFramed === bFramed) return 0;
+    return aFramed ? 1 : -1;
+  });
+}
 
 function mergeSeedWithDb(seed: Painting, db?: Partial<Painting>): Painting {
   if (!db || db.slug !== seed.slug) return seed;
@@ -79,7 +97,7 @@ export async function getPaintings(): Promise<Painting[]> {
     }
 
     const rows = paintingsRes.data ?? [];
-    if (rows.length === 0) return SEED_PAINTINGS;
+    if (rows.length === 0) return placeFramedPaintingsLast(SEED_PAINTINGS);
 
     const dbSlugs = new Set(rows.map((p) => p.slug));
     const dbPaintings = rows.map((p) => ({
@@ -88,7 +106,7 @@ export async function getPaintings(): Promise<Painting[]> {
     }));
     const missingSeedPaintings = SEED_PAINTINGS.filter((p) => !dbSlugs.has(p.slug));
 
-    return [...dbPaintings, ...missingSeedPaintings];
+    return placeFramedPaintingsLast([...dbPaintings, ...missingSeedPaintings]);
   } catch (err) {
     const safeErr =
       err instanceof Error
