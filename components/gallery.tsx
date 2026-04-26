@@ -10,13 +10,23 @@ type Props = { paintings: Painting[] };
 
 export default function Gallery({ paintings }: Props) {
   const { openDetail } = useCart();
+  const scaleLongSide = Math.max(
+    1,
+    ...paintings.map((p) => Math.max(p.w, p.h)),
+  );
 
   return (
     <section>
       <div className="gallery-wrap">
         <div className="gallery-grid">
           {paintings.map((p, i) => (
-            <GalleryCard key={p.id} painting={p} index={i} onOpen={() => openDetail(p)} />
+            <GalleryCard
+              key={p.id}
+              painting={p}
+              index={i}
+              scaleLongSide={scaleLongSide}
+              onOpen={() => openDetail(p)}
+            />
           ))}
         </div>
       </div>
@@ -28,14 +38,17 @@ function GalleryCard({
   painting,
   onOpen,
   index,
+  scaleLongSide,
 }: {
   painting: Painting;
   onOpen: () => void;
   index: number;
+  scaleLongSide: number;
 }) {
   const [hover, setHover] = useState(false);
   const sold = painting.status === "sold";
   const priceLabel = painting.price > 0 ? `$${painting.price}` : "Price on request";
+  const imageWidth = `${Math.min(100, (painting.w / scaleLongSide) * 100)}%`;
   const details = [
     painting.medium,
     `${painting.w}″ × ${painting.h}″`,
@@ -65,6 +78,8 @@ function GalleryCard({
         <div
           style={{
             position: "relative",
+            width: imageWidth,
+            marginInline: "auto",
             transition: "transform .6s cubic-bezier(.2,.6,.2,1)",
             transform: hover ? "translateY(-3px)" : "translateY(0)",
           }}
@@ -101,6 +116,8 @@ function GalleryCard({
             gridTemplateColumns: "1fr auto",
             alignItems: "baseline",
             gap: 16,
+            width: imageWidth,
+            marginInline: "auto",
             marginTop: 20,
           }}
         >
