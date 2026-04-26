@@ -103,6 +103,9 @@ export async function POST(
       const link = await stripe.paymentLinks.create({
         line_items: [{ price: price.id, quantity: 1 }],
         shipping_address_collection: { allowed_countries: ["US", "CA"] },
+        payment_intent_data: {
+          metadata: { painting_ids: painting.id, offer_id: offer.id },
+        },
         after_completion: {
           type: "redirect",
           redirect: { url: `${siteUrl}/checkout/success` },

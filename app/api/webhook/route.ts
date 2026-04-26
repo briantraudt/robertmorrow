@@ -3,7 +3,7 @@
 //
 // Configure from Stripe → Developers → Webhooks → Add endpoint:
 //   URL:    https://robertmorrow.art/api/webhook
-//   Events: checkout.session.completed
+//   Events: checkout.session.completed, payment_intent.succeeded
 // Copy the signing secret into STRIPE_WEBHOOK_SECRET.
 //
 // On success: inserts an `orders` row and flips painting.status to 'sold'.
@@ -116,6 +116,45 @@ export async function POST(req: Request) {
       console.error("[webhook] database write failed", err);
       // The order upsert is idempotent, so ask Stripe to retry if we could
       // not reliably record the sale or mark the painting sold.
+      return NextResponse.json(
+        { error: "Webhook database write failed." },
+        { status: 500 },
+      );
+    }
+  }
+
+  if (event.type === "payment_intent.succeeded") {
+    const paymentIntent = event.data.object as Stripe.PaymentIntent;
+    const paintingIds = (paymentIntent.metadata?.painting_ids ?? "")
+      .split(",")
+      .filter(Boolean);
+
+    try {
+      const supabase = createServerSupabaseClient();
+      await supabase.from("orders").upsert(
+        {
+          stripe_session_id: paymentIntent.id,
+          stripe_payment_intent: paymentIntent.id,
+          email: paymentIntent.receipt_email ?? null,
+          name: paymentIntent.shipping?.name ?? paymentIntent.metadata?.buyer_name ?? null,
+          amount_total: paymentIntent.amount_received || paymentIntent.amount,
+          currency: paymentIntent.currency ?? "usd",
+          status: "paid",
+          painting_ids: paintingIds,
+          shipping_address: (paymentIntent.shipping ?? null) as unknown as object,
+        },
+        { onConflict: "stripe_session_id" },
+      );
+
+      if (paintingIds.length) {
+        await insertMissingSeedPaintings(supabase, paintingIds);
+        await supabase
+          .from("paintings")
+          .update({ status: "sold" })
+          .in("id", paintingIds);
+      }
+    } catch (err) {
+      console.error("[webhook] payment intent database write failed", err);
       return NextResponse.json(
         { error: "Webhook database write failed." },
         { status: 500 },

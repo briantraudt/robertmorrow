@@ -1,8 +1,8 @@
 // =======================================================================
 // POST /api/checkout
-// Creates a Stripe Checkout Session for the items in the buyer's cart.
+// Creates a Stripe PaymentIntent for the items in the buyer's cart.
 // Body: { items: [{ id, slug }], email, name, address }
-// Response: { url }
+// Response: { clientSecret }
 // =======================================================================
 
 import { NextResponse } from "next/server";
@@ -11,17 +11,22 @@ import { getPainting } from "@/lib/paintings";
 
 export const runtime = "nodejs";
 
-const DELIVERY_FLAT_USD = 0;
-
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     const itemRefs: { id?: string; slug?: string }[] = body.items ?? [];
     const email: string | undefined = body.email;
-    const siteUrl =
-      process.env.NEXT_PUBLIC_SITE_URL ||
-      req.headers.get("origin") ||
-      "http://localhost:3000";
+    const name: string | undefined = body.name;
+    const address = body.address as
+      | {
+          line1?: string;
+          line2?: string;
+          city?: string;
+          state?: string;
+          postal_code?: string;
+          country?: string;
+        }
+      | undefined;
 
     if (!itemRefs.length) {
       return NextResponse.json({ error: "Cart is empty." }, { status: 400 });
@@ -55,46 +60,41 @@ export async function POST(req: Request) {
     }
 
     const stripe = getStripe();
-    const lineItems = resolved.map((p) => ({
-      quantity: 1,
-      price_data: {
-        currency: "usd",
-        unit_amount: p.price * 100,
-        product_data: {
-          name: p.year > 0 ? `${p.title} (${p.year})` : p.title,
-          description: `${p.medium}, ${p.w}″ × ${p.h}″`,
-          metadata: { painting_id: p.id, slug: p.slug },
-        },
-      },
-    }));
-
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      line_items: lineItems,
-      customer_email: email,
-      success_url: `${siteUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${siteUrl}/checkout`,
-      shipping_address_collection: { allowed_countries: ["US", "CA"] },
-      shipping_options: [
-        {
-          shipping_rate_data: {
-            display_name: "Free delivery",
-            type: "fixed_amount",
-            fixed_amount: { amount: DELIVERY_FLAT_USD * 100, currency: "usd" },
-            delivery_estimate: {
-              minimum: { unit: "business_day", value: 5 },
-              maximum: { unit: "business_day", value: 10 },
-            },
-          },
-        },
-      ],
-      automatic_tax: { enabled: false }, // enable once Stripe Tax is configured
+    const subtotal = resolved.reduce((sum, p) => sum + p.price, 0);
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: subtotal * 100,
+      currency: "usd",
+      receipt_email: email,
+      automatic_payment_methods: { enabled: true },
+      description:
+        resolved.length === 1
+          ? `${resolved[0].title} by Robert Morrow`
+          : `${resolved.length} paintings by Robert Morrow`,
       metadata: {
         painting_ids: resolved.map((p) => p.id).join(","),
+        painting_slugs: resolved.map((p) => p.slug).join(","),
+        buyer_name: name ?? "",
       },
+      shipping:
+        name && address
+          ? {
+              name,
+              address: {
+                line1: address.line1 ?? "",
+                line2: address.line2 || undefined,
+                city: address.city ?? "",
+                state: address.state ?? "",
+                postal_code: address.postal_code ?? "",
+                country: address.country ?? "US",
+              },
+            }
+          : undefined,
     });
 
-    return NextResponse.json({ url: session.url });
+    return NextResponse.json({
+      clientSecret: paymentIntent.client_secret,
+      total: subtotal,
+    });
   } catch (err: unknown) {
     console.error("[api/checkout]", err);
     const message = err instanceof Error ? err.message : "Checkout failed.";

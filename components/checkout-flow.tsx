@@ -1,21 +1,32 @@
 "use client";
 
 // =======================================================================
-// Visual three-step form that mirrors the design handoff, then hands off
-// to a real Stripe Checkout Session at the "Place order" step.
+// Visual three-step checkout with Stripe's Payment Element embedded on-site.
 // =======================================================================
 
 import { useState } from "react";
 import Link from "next/link";
+import {
+  Elements,
+  PaymentElement,
+  useElements,
+  useStripe,
+} from "@stripe/react-stripe-js";
+import { loadStripe } from "@stripe/stripe-js";
 import PaintingImage from "./painting-image";
 import { IconArrowLeft, IconCheck } from "./icons";
 import { useCart } from "./cart-provider";
+
+const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+  ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
+  : null;
 
 export default function CheckoutFlow() {
   const { cart, clearCart } = useCart();
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [form, setForm] = useState({
     email: "",
     name: "",
@@ -34,10 +45,13 @@ export default function CheckoutFlow() {
 
   const empty = cart.length === 0 && step !== 4;
 
-  async function handlePlaceOrder() {
+  async function preparePaymentStep() {
     setError(null);
     setSubmitting(true);
     try {
+      if (!stripePromise) {
+        throw new Error("Stripe is not configured yet.");
+      }
       const res = await fetch("/api/checkout", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -56,13 +70,14 @@ export default function CheckoutFlow() {
         }),
       });
       const data = await res.json();
-      if (!res.ok || !data.url) {
+      if (!res.ok || !data.clientSecret) {
         throw new Error(data.error || "Checkout failed. Please try again.");
       }
-      // Cart will be cleared after Stripe redirects back to /checkout/success.
-      window.location.href = data.url as string;
+      setClientSecret(data.clientSecret as string);
+      setStep(3);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Checkout failed.");
+    } finally {
       setSubmitting(false);
     }
   }
@@ -241,11 +256,15 @@ export default function CheckoutFlow() {
                 <Field label="ZIP" value={form.zip} onChange={(v) => set("zip", v)} />
               </div>
               <Next
-                onNext={() => setStep(3)}
+                onNext={preparePaymentStep}
                 disabled={
-                  !form.address1 || !form.city || !form.state || !form.zip
+                  submitting ||
+                  !form.address1 ||
+                  !form.city ||
+                  !form.state ||
+                  !form.zip
                 }
-                label="Continue to payment"
+                label={submitting ? "Preparing payment..." : "Continue to payment"}
               />
             </StepCard>
           )}
@@ -253,9 +272,9 @@ export default function CheckoutFlow() {
           {step === 3 && (
             <StepCard title="Payment">
               <p className="muted" style={{ fontSize: 13, lineHeight: 1.6 }}>
-                We use Stripe for secure checkout. You'll be taken to Stripe's
-                hosted page to enter your card, then returned here with your
-                order confirmation.
+                Secure card entry is handled by Stripe here on Robert&apos;s
+                site. You won&apos;t be sent to a separate checkout page unless
+                your bank requires an extra verification step.
               </p>
               {error && (
                 <div
@@ -271,11 +290,64 @@ export default function CheckoutFlow() {
                   {error}
                 </div>
               )}
-              <Next
-                onNext={handlePlaceOrder}
-                disabled={submitting}
-                label={submitting ? "Redirecting…" : `Place order · $${total}`}
-              />
+              {clientSecret && stripePromise ? (
+                <Elements
+                  stripe={stripePromise}
+                  options={{
+                    clientSecret,
+                    appearance: {
+                      theme: "stripe",
+                      variables: {
+                        colorPrimary: "#1C1915",
+                        colorText: "#1C1915",
+                        colorTextSecondary: "#6B6557",
+                        colorBackground: "#FCFAF6",
+                        colorDanger: "#A42F2F",
+                        fontFamily:
+                          "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+                        borderRadius: "0px",
+                        spacingUnit: "4px",
+                      },
+                      rules: {
+                        ".Input": {
+                          border: "1px solid #ded8ce",
+                          boxShadow: "none",
+                        },
+                        ".Input:focus": {
+                          border: "1px solid #1C1915",
+                          boxShadow: "none",
+                        },
+                        ".Label": {
+                          color: "#6B6557",
+                          fontSize: "11px",
+                          letterSpacing: "0.12em",
+                          textTransform: "uppercase",
+                        },
+                        ".Tab": {
+                          border: "1px solid #ded8ce",
+                          boxShadow: "none",
+                        },
+                        ".Tab--selected": {
+                          borderColor: "#1C1915",
+                          boxShadow: "none",
+                        },
+                      },
+                    },
+                  }}
+                >
+                  <EmbeddedPayment
+                    total={total}
+                    clearCart={clearCart}
+                    setError={setError}
+                  />
+                </Elements>
+              ) : (
+                <Next
+                  onNext={preparePaymentStep}
+                  disabled={submitting}
+                  label={submitting ? "Preparing payment..." : "Load payment form"}
+                />
+              )}
             </StepCard>
           )}
         </div>
@@ -350,6 +422,80 @@ export default function CheckoutFlow() {
         </aside>
       </div>
     </div>
+  );
+}
+
+function EmbeddedPayment({
+  total,
+  clearCart,
+  setError,
+}: {
+  total: number;
+  clearCart: () => void;
+  setError: (message: string | null) => void;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [paying, setPaying] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+
+    setError(null);
+    setPaying(true);
+    const { error, paymentIntent } = await stripe.confirmPayment({
+      elements,
+      confirmParams: {
+        return_url: `${window.location.origin}/checkout/success`,
+      },
+      redirect: "if_required",
+    });
+
+    if (error) {
+      setError(error.message ?? "Payment failed. Please try again.");
+      setPaying(false);
+      return;
+    }
+
+    if (paymentIntent?.status === "succeeded" || paymentIntent?.status === "processing") {
+      clearCart();
+      window.location.href = `/checkout/success?payment_intent=${paymentIntent.id}`;
+      return;
+    }
+
+    setError("Payment could not be completed. Please try again.");
+    setPaying(false);
+  }
+
+  return (
+    <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <div
+        style={{
+          border: "1px solid var(--line)",
+          padding: 18,
+          background: "var(--paper-2)",
+        }}
+      >
+        <PaymentElement />
+      </div>
+      <button
+        type="submit"
+        disabled={!stripe || !elements || paying}
+        className="small-caps"
+        style={{
+          marginTop: 12,
+          padding: "16px 24px",
+          background: !stripe || !elements || paying ? "var(--paper-3)" : "var(--ink)",
+          color: !stripe || !elements || paying ? "var(--ink-3)" : "var(--paper)",
+          fontSize: 11,
+          letterSpacing: "0.22em",
+          cursor: !stripe || !elements || paying ? "not-allowed" : "pointer",
+        }}
+      >
+        {paying ? "Processing..." : `Pay securely · $${total}`}
+      </button>
+    </form>
   );
 }
 

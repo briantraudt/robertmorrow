@@ -17,7 +17,7 @@ export default function CheckoutSuccessPage() {
 
 function SuccessInner() {
   const params = useSearchParams();
-  const sessionId = params.get("session_id");
+  const orderRef = params.get("payment_intent") ?? params.get("session_id");
   const { clearCart } = useCart();
 
   // Clear the cart on a successful Stripe return.
@@ -25,10 +25,10 @@ function SuccessInner() {
     clearCart();
   }, [clearCart]);
 
-  return <SuccessShell sessionId={sessionId ?? undefined} />;
+  return <SuccessShell orderRef={orderRef ?? undefined} />;
 }
 
-function SuccessShell({ sessionId }: { sessionId?: string }) {
+function SuccessShell({ orderRef }: { orderRef?: string }) {
   return (
     <section
       style={{
@@ -62,12 +62,12 @@ function SuccessShell({ sessionId }: { sessionId?: string }) {
         A confirmation has been sent to your email. Robert will pack and ship
         your painting within five business days.
       </p>
-      {sessionId && (
+      {orderRef && (
         <div
           className="small-caps muted"
           style={{ marginTop: 36, fontSize: 10.5, letterSpacing: "0.2em" }}
         >
-          Order reference · {sessionId.slice(-10).toUpperCase()}
+          Order reference · {orderRef.slice(-10).toUpperCase()}
         </div>
       )}
       <Link
