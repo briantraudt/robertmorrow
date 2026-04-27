@@ -7,8 +7,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
+  CardElement,
   Elements,
-  PaymentElement,
   useElements,
   useStripe,
 } from "@stripe/react-stripe-js";
@@ -336,9 +336,22 @@ export default function CheckoutFlow() {
                   }}
                 >
                   <EmbeddedPayment
+                    clientSecret={clientSecret}
                     total={total}
                     clearCart={clearCart}
                     setError={setError}
+                    billingDetails={{
+                      name: form.name,
+                      email: form.email,
+                      address: {
+                        line1: form.address1,
+                        line2: form.address2 || undefined,
+                        city: form.city,
+                        state: form.state,
+                        postal_code: form.zip,
+                        country: "US",
+                      },
+                    }}
                   />
                 </Elements>
               ) : (
@@ -426,13 +439,28 @@ export default function CheckoutFlow() {
 }
 
 function EmbeddedPayment({
+  clientSecret,
   total,
   clearCart,
   setError,
+  billingDetails,
 }: {
+  clientSecret: string;
   total: number;
   clearCart: () => void;
   setError: (message: string | null) => void;
+  billingDetails: {
+    name: string;
+    email: string;
+    address: {
+      line1: string;
+      line2?: string;
+      city: string;
+      state: string;
+      postal_code: string;
+      country: string;
+    };
+  };
 }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -444,12 +472,18 @@ function EmbeddedPayment({
 
     setError(null);
     setPaying(true);
-    const { error, paymentIntent } = await stripe.confirmPayment({
-      elements,
-      confirmParams: {
-        return_url: `${window.location.origin}/checkout/success`,
+    const card = elements.getElement(CardElement);
+    if (!card) {
+      setError("Card form is still loading. Please try again.");
+      setPaying(false);
+      return;
+    }
+
+    const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
+      payment_method: {
+        card,
+        billing_details: billingDetails,
       },
-      redirect: "if_required",
     });
 
     if (error) {
@@ -477,7 +511,28 @@ function EmbeddedPayment({
           background: "var(--paper-2)",
         }}
       >
-        <PaymentElement />
+        <CardElement
+          options={{
+            disableLink: true,
+            hidePostalCode: true,
+            style: {
+              base: {
+                color: "#1C1915",
+                fontFamily:
+                  "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+                fontSize: "18px",
+                fontSmoothing: "antialiased",
+                "::placeholder": {
+                  color: "#9C9585",
+                },
+              },
+              invalid: {
+                color: "#A42F2F",
+                iconColor: "#A42F2F",
+              },
+            },
+          }}
+        />
       </div>
       <button
         type="submit"
