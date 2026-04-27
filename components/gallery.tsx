@@ -10,7 +10,6 @@ type Props = { paintings: Painting[] };
 
 export default function Gallery({ paintings }: Props) {
   const { openDetail } = useCart();
-  const availableCount = paintings.filter((p) => p.status !== "sold").length;
   const scaleLongSide = Math.max(
     1,
     ...paintings.map((p) => Math.max(p.w, p.h)),
@@ -19,26 +18,6 @@ export default function Gallery({ paintings }: Props) {
   return (
     <section>
       <div className="gallery-wrap">
-        <header className="gallery-intro">
-          <div>
-            <div className="micro muted">Available paintings</div>
-            <h1 className="gallery-title serif">
-              Acrylic landscapes and abstractions from Texas Hill Country light.
-            </h1>
-          </div>
-          <div className="gallery-intro-copy">
-            <p>
-              Robert Morrow works between Spicewood, Texas, and Cloudcroft, New
-              Mexico, making small original paintings shaped by dry light,
-              mountain air, and remembered distance.
-            </p>
-            <div className="gallery-meta-row">
-              <span>{availableCount} available works</span>
-              <span>Acrylic on canvas</span>
-              <span>Ships flat</span>
-            </div>
-          </div>
-        </header>
         <div className="gallery-grid">
           {paintings.map((p, i) => (
             <GalleryCard
