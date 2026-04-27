@@ -59,8 +59,8 @@ function SuccessShell({ orderRef }: { orderRef?: string }) {
           lineHeight: 1.7,
         }}
       >
-        A confirmation has been sent to your email. Robert will pack and ship
-        your painting within five business days.
+        A confirmation has been sent to your email. Robert will contact you
+        shortly to discuss delivery options.
       </p>
       {orderRef && (
         <div
