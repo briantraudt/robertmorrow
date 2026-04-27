@@ -7,9 +7,11 @@
 
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { isAdmin } from "@/lib/admin-auth";
 import { getStripe } from "@/lib/stripe";
 import { getPainting } from "@/lib/paintings";
 import { SEED_PAINTINGS } from "@/lib/seed-data";
+import { forbiddenOriginResponse, isSameOrigin, rateLimit, rateLimitResponse } from "@/lib/security";
 
 export const runtime = "nodejs";
 
@@ -53,6 +55,13 @@ export async function POST(
   { params }: { params: { token: string } },
 ) {
   try {
+    if (!isSameOrigin(req)) return forbiddenOriginResponse();
+    if (!isAdmin()) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const limit = rateLimit(req, "offer-actions", 20, 10 * 60 * 1000);
+    if (!limit.ok) return rateLimitResponse(limit.retryAfter);
+
     const body = await req.json();
     const action = String(body.action ?? "");
     if (!["accept", "counter", "decline"].includes(action)) {

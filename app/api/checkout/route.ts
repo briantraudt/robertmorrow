@@ -8,11 +8,15 @@
 import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { getPainting } from "@/lib/paintings";
+import { rateLimit, rateLimitResponse } from "@/lib/security";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
+    const limit = rateLimit(req, "checkout", 20, 10 * 60 * 1000);
+    if (!limit.ok) return rateLimitResponse(limit.retryAfter);
+
     const body = await req.json();
     const itemRefs: { id?: string; slug?: string }[] = body.items ?? [];
     const email: string | undefined = body.email;
@@ -30,6 +34,9 @@ export async function POST(req: Request) {
 
     if (!itemRefs.length) {
       return NextResponse.json({ error: "Cart is empty." }, { status: 400 });
+    }
+    if (itemRefs.length > 10) {
+      return NextResponse.json({ error: "Cart has too many items." }, { status: 400 });
     }
 
     // Validate and price every item server-side (never trust client prices).

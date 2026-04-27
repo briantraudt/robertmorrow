@@ -10,6 +10,7 @@ import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { revalidatePath } from "next/cache";
+import { forbiddenOriginResponse, isSameOrigin } from "@/lib/security";
 
 export const runtime = "nodejs";
 
@@ -45,6 +46,7 @@ async function uniqueSlug(
 }
 
 export async function POST(req: Request) {
+  if (!isSameOrigin(req)) return forbiddenOriginResponse();
   if (!isAdmin()) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

@@ -7,11 +7,15 @@
 // =======================================================================
 
 import { NextResponse } from "next/server";
+import { rateLimit, rateLimitResponse } from "@/lib/security";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
+    const limit = rateLimit(req, "contact", 5, 10 * 60 * 1000);
+    if (!limit.ok) return rateLimitResponse(limit.retryAfter);
+
     const body = await req.json();
     const { name, email, subject, message } = body as {
       name?: string;

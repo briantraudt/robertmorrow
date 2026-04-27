@@ -14,6 +14,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import sharp from "sharp";
 import { isAdmin } from "@/lib/admin-auth";
+import { forbiddenOriginResponse, isSameOrigin } from "@/lib/security";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -26,8 +27,10 @@ const TRIM_THRESHOLD = 40;
 // Cap the stored image's long edge. Keeps uploads reasonable and the
 // gallery fast without losing detail on a 24" monitor.
 const MAX_EDGE = 2200;
+const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
 
 export async function POST(req: Request) {
+  if (!isSameOrigin(req)) return forbiddenOriginResponse();
   if (!isAdmin()) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -54,6 +57,12 @@ export async function POST(req: Request) {
     const file = form.get("file");
     if (!file || !(file instanceof Blob)) {
       return NextResponse.json({ error: "No file uploaded." }, { status: 400 });
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      return NextResponse.json(
+        { error: "Image is too large. Please use a file under 12 MB." },
+        { status: 413 },
+      );
     }
     const originalName = (form.get("filename") as string) || "painting";
     const looksLikeImage =

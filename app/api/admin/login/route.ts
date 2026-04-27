@@ -10,11 +10,21 @@ import {
   getExpectedToken,
   verifyPassword,
 } from "@/lib/admin-auth";
+import {
+  forbiddenOriginResponse,
+  isSameOrigin,
+  rateLimit,
+  rateLimitResponse,
+} from "@/lib/security";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
+    if (!isSameOrigin(req)) return forbiddenOriginResponse();
+    const limit = rateLimit(req, "admin-login", 8, 10 * 60 * 1000);
+    if (!limit.ok) return rateLimitResponse(limit.retryAfter);
+
     const body = await req.json();
     const password = String(body?.password ?? "");
     if (!verifyPassword(password)) {

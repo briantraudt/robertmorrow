@@ -11,11 +11,15 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getPainting } from "@/lib/paintings";
+import { rateLimit, rateLimitResponse } from "@/lib/security";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
+    const limit = rateLimit(req, "offers", 8, 10 * 60 * 1000);
+    if (!limit.ok) return rateLimitResponse(limit.retryAfter);
+
     const body = await req.json();
     const {
       painting_id,

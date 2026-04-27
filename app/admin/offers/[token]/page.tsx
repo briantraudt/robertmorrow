@@ -13,6 +13,7 @@
 import { notFound } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getPainting } from "@/lib/paintings";
+import { requireAdmin } from "@/lib/admin-auth";
 import OfferActions from "./offer-actions";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +39,8 @@ export default async function AdminOfferPage({
   params: { token: string };
   searchParams: { action?: string };
 }) {
+  requireAdmin();
+
   let offer: OfferRow | null = null;
   try {
     const supabase = createServerSupabaseClient();

@@ -8,6 +8,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { findPainting as seedFind } from "@/lib/seed-data";
 import { revalidatePath } from "next/cache";
+import { forbiddenOriginResponse, isSameOrigin } from "@/lib/security";
 
 export const runtime = "nodejs";
 
@@ -61,6 +62,7 @@ export async function PATCH(
   req: Request,
   { params }: { params: { id: string } },
 ) {
+  if (!isSameOrigin(req)) return forbiddenOriginResponse();
   if (!isAdmin()) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -165,9 +167,10 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: { id: string } },
 ) {
+  if (!isSameOrigin(req)) return forbiddenOriginResponse();
   if (!isAdmin()) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
