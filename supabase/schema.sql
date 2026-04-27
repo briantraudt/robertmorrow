@@ -33,6 +33,7 @@ create table if not exists paintings (
   price        integer not null,
   status       text not null default 'available'
                check (status in ('available','sold','reserved')),
+  framing      text,
   note         text,
   palette      text[],
   aspect       numeric,
@@ -43,6 +44,9 @@ create table if not exists paintings (
 
 create index if not exists paintings_status_idx on paintings (status);
 create index if not exists paintings_series_idx on paintings (series);
+
+alter table paintings
+  add column if not exists framing text;
 
 -- ---------- Painting images -----------------------------------------------
 create table if not exists painting_images (

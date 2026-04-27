@@ -19,8 +19,8 @@ type FormState = {
   h: string;
   price: string;
   status: "available" | "sold" | "reserved";
+  framing: string;
   note: string;
-  slug: string;
   sort_order: string;
 };
 
@@ -111,8 +111,8 @@ export default function PaintingForm({ mode, painting }: Props) {
     h: painting?.h ? String(painting.h) : "",
     price: painting?.price ? String(painting.price) : "",
     status: (painting?.status as "available" | "sold" | "reserved") ?? "available",
+    framing: painting?.framing ?? "Unframed; shipped flat",
     note: painting?.note ?? "",
-    slug: painting?.slug ?? "",
     sort_order: "",
   }));
   const [file, setFile] = useState<File | null>(null);
@@ -170,8 +170,8 @@ export default function PaintingForm({ mode, painting }: Props) {
         h: Number(form.h),
         price: Number(form.price),
         status: form.status,
+        framing: form.framing || null,
         note: form.note || null,
-        slug: form.slug || undefined as unknown as string,
       };
       if (form.sort_order) payload.sort_order = Number(form.sort_order);
       if (imageUrl) payload.imageUrl = imageUrl;
@@ -383,11 +383,11 @@ export default function PaintingForm({ mode, painting }: Props) {
             </Field>
           </div>
 
-          <Field label="Slug (optional — auto from title)">
+          <Field label="Framing">
             <input
-              value={form.slug}
-              onChange={(e) => update("slug", e.target.value)}
-              placeholder="auto-generated"
+              value={form.framing}
+              onChange={(e) => update("framing", e.target.value)}
+              placeholder="Unframed; shipped flat"
               style={inputStyle}
             />
           </Field>

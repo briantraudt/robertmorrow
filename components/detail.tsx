@@ -194,10 +194,8 @@ export default function Detail({ painting, onClose }: Props) {
                   <dd>{p.year}</dd>
                 </>
               )}
-              <dt className="small-caps muted" style={{ fontSize: 10 }}>Signed</dt>
-              <dd>Lower right, verso inscription</dd>
               <dt className="small-caps muted" style={{ fontSize: 10 }}>Framing</dt>
-              <dd>Unframed; shipped flat</dd>
+              <dd>{p.framing || "Unframed; shipped flat"}</dd>
               <dt className="small-caps muted" style={{ fontSize: 10 }}>Delivery</dt>
               <dd>Free local delivery. Shipping available upon request.</dd>
             </dl>

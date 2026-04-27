@@ -25,6 +25,7 @@ export type Painting = {
   h: number; // inches
   price: number; // USD
   status: PaintingStatus;
+  framing?: string | null;
   note?: string | null;
   images: PaintingImage[];
   // Placeholder palette & aspect ratio — used by <PaintingImage> when no real

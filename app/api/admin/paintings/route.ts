@@ -14,12 +14,34 @@ import { revalidatePath } from "next/cache";
 export const runtime = "nodejs";
 
 function slugify(s: string) {
-  return s
+  const slug = s
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9\s-]/g, "")
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-");
+  return slug || "painting";
+}
+
+async function uniqueSlug(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  title: string,
+) {
+  const base = slugify(title);
+  let slug = base;
+  let suffix = 2;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("paintings")
+      .select("id")
+      .eq("slug", slug)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return slug;
+    slug = `${base}-${suffix}`;
+    suffix += 1;
+  }
 }
 
 export async function POST(req: Request) {
@@ -38,7 +60,7 @@ export async function POST(req: Request) {
       price,
       status,
       note,
-      slug: slugIn,
+      framing,
       sort_order,
       imageUrl,
       imageWidth,
@@ -52,10 +74,10 @@ export async function POST(req: Request) {
       );
     }
 
-    const slug = slugIn ? slugify(String(slugIn)) : slugify(String(title));
+    const supabase = createServerSupabaseClient();
+    const slug = await uniqueSlug(supabase, String(title));
     const id = `rm-${slug}-${Math.random().toString(36).slice(2, 7)}`;
 
-    const supabase = createServerSupabaseClient();
     const { error: insErr } = await supabase.from("paintings").insert({
       id,
       slug,
@@ -67,6 +89,7 @@ export async function POST(req: Request) {
       h: Number(h),
       price: Number(price),
       status: (status as string) || "available",
+      framing: framing ? String(framing) : null,
       note: note ? String(note) : null,
       sort_order: sort_order ? Number(sort_order) : null,
     });

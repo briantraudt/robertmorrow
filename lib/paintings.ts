@@ -49,7 +49,15 @@ function mergeSeedWithDb(seed: Painting, db?: Partial<Painting>): Painting {
   return {
     ...seed,
     ...db,
+    framing: db.framing ?? seed.framing ?? null,
     images: db.images?.length ? db.images : seed.images,
+  };
+}
+
+function withDefaultFraming(painting: Painting): Painting {
+  return {
+    ...painting,
+    framing: painting.framing ?? "Unframed; shipped flat",
   };
 }
 
@@ -68,17 +76,27 @@ export async function getPaintings(): Promise<Painting[]> {
 
     // Two separate queries, joined in JS — more robust than PostgREST embedded
     // resources, which can silently fail on relationship inference.
-    const [paintingsRes, imagesRes] = await Promise.all([
-      supabase
+    let paintingsRes: any = await supabase
+        .from("paintings")
+        .select(
+          "id, slug, title, year, series, medium, w, h, price, status, framing, note, palette, aspect",
+        )
+        .order("sort_order", { ascending: true, nullsFirst: false });
+    if (
+      paintingsRes.error &&
+      /framing/i.test(`${paintingsRes.error.message} ${paintingsRes.error.details ?? ""}`)
+    ) {
+      paintingsRes = await supabase
         .from("paintings")
         .select(
           "id, slug, title, year, series, medium, w, h, price, status, note, palette, aspect",
         )
-        .order("sort_order", { ascending: true, nullsFirst: false }),
-      supabase
+        .order("sort_order", { ascending: true, nullsFirst: false });
+    }
+
+    const imagesRes = await supabase
         .from("painting_images")
-        .select("painting_id, url, alt, width, height, is_primary, sort_order"),
-    ]);
+        .select("painting_id, url, alt, width, height, is_primary, sort_order");
 
     if (paintingsRes.error) {
       console.error(
@@ -120,21 +138,21 @@ export async function getPaintings(): Promise<Painting[]> {
       byPainting.set(img.painting_id, list);
     }
 
-    const rows = paintingsRes.data ?? [];
+    const rows = (paintingsRes.data ?? []) as Array<{ id: string; slug: string } & Partial<Painting>>;
     if (rows.length === 0) return sortForGallery(SEED_PAINTINGS);
 
     const dbSeedKeys = new Set(rows.flatMap((p) => [p.id, p.slug]));
     const dbPaintings = rows.map((p) =>
-      mergeSeedImagesForList({
+      withDefaultFraming(mergeSeedImagesForList({
         ...(p as unknown as Painting),
         images: byPainting.get(p.id) ?? [],
-      }),
+      })),
     );
     const missingSeedPaintings = SEED_PAINTINGS.filter(
       (p) => !dbSeedKeys.has(p.id) && !dbSeedKeys.has(p.slug),
     );
 
-    return sortForGallery([...dbPaintings, ...missingSeedPaintings]);
+    return sortForGallery([...dbPaintings, ...missingSeedPaintings.map(withDefaultFraming)]);
   } catch (err) {
     const safeErr =
       err instanceof Error
@@ -157,13 +175,26 @@ export async function getPainting(
   const seedPainting = seedFind(idOrSlug);
   try {
     const supabase = createServerSupabaseClient();
-    const { data: painting, error } = await supabase
+    let paintingRes: any = await supabase
       .from("paintings")
       .select(
-        "id, slug, title, year, series, medium, w, h, price, status, note, palette, aspect",
+        "id, slug, title, year, series, medium, w, h, price, status, framing, note, palette, aspect",
       )
       .or(`id.eq.${idOrSlug},slug.eq.${idOrSlug}`)
       .maybeSingle();
+    if (
+      paintingRes.error &&
+      /framing/i.test(`${paintingRes.error.message} ${paintingRes.error.details ?? ""}`)
+    ) {
+      paintingRes = await supabase
+        .from("paintings")
+        .select(
+          "id, slug, title, year, series, medium, w, h, price, status, note, palette, aspect",
+        )
+        .or(`id.eq.${idOrSlug},slug.eq.${idOrSlug}`)
+        .maybeSingle();
+    }
+    const { data: painting, error } = paintingRes;
     if (error) {
       console.error(
         "RMDBG getPainting error:",
@@ -178,7 +209,7 @@ export async function getPainting(
     }
     if (painting) {
       if (seedPainting) {
-        return mergeSeedWithDb(seedPainting, painting as unknown as Partial<Painting>);
+        return withDefaultFraming(mergeSeedWithDb(seedPainting, painting as unknown as Partial<Painting>));
       }
       const { data: images } = await supabase
         .from("painting_images")
@@ -186,6 +217,7 @@ export async function getPainting(
         .eq("painting_id", (painting as { id: string }).id);
       return {
         ...(painting as unknown as Painting),
+        framing: (painting as unknown as Painting).framing ?? "Unframed; shipped flat",
         images: images ?? [],
       };
     }
@@ -196,5 +228,5 @@ export async function getPainting(
         : { raw: String(err) };
     console.error("RMDBG getPainting catch:", JSON.stringify(safeErr));
   }
-  return seedPainting ?? null;
+  return seedPainting ? withDefaultFraming(seedPainting) : null;
 }

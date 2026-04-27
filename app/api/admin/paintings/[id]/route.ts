@@ -20,10 +20,42 @@ const EDITABLE_FIELDS = [
   "h",
   "price",
   "status",
+  "framing",
   "note",
-  "slug",
   "sort_order",
 ] as const;
+
+function slugify(s: string) {
+  const slug = s
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-");
+  return slug || "painting";
+}
+
+async function uniqueSlug(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  title: string,
+  currentId: string,
+) {
+  const base = slugify(title);
+  let slug = base;
+  let suffix = 2;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("paintings")
+      .select("id")
+      .eq("slug", slug)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data || data.id === currentId) return slug;
+    slug = `${base}-${suffix}`;
+    suffix += 1;
+  }
+}
 
 export async function PATCH(
   req: Request,
@@ -35,6 +67,12 @@ export async function PATCH(
   try {
     const body = await req.json();
     const supabase = createServerSupabaseClient();
+    const current = await supabase
+      .from("paintings")
+      .select("id, slug, title")
+      .eq("id", params.id)
+      .maybeSingle();
+    if (current.error) throw current.error;
 
     // Whitelist fields we accept on update.
     const update: Record<string, string | number | null> = {};
@@ -42,7 +80,7 @@ export async function PATCH(
       if (key in body) {
         const v = body[key];
         if (v === "" || v === undefined || v === null) {
-          if (key === "note" || key === "sort_order") update[key] = null;
+          if (key === "note" || key === "framing" || key === "sort_order") update[key] = null;
           if (key === "year") update[key] = 0;
         } else {
           update[key] =
@@ -51,6 +89,9 @@ export async function PATCH(
               : String(v);
         }
       }
+    }
+    if ("title" in update) {
+      update.slug = await uniqueSlug(supabase, String(update.title), params.id);
     }
     if (Object.keys(update).length) {
       update["updated_at"] = new Date().toISOString();
@@ -80,6 +121,7 @@ export async function PATCH(
           h: seed.h,
           price: seed.price,
           status: seed.status,
+          framing: seed.framing ?? null,
           note: seed.note ?? null,
           palette: seed.palette ?? null,
           aspect: seed.aspect ?? null,
@@ -111,6 +153,8 @@ export async function PATCH(
 
     revalidatePath("/");
     revalidatePath(`/paintings/${params.id}`);
+    if (current.data?.slug) revalidatePath(`/paintings/${current.data.slug}`);
+    if (typeof update.slug === "string") revalidatePath(`/paintings/${update.slug}`);
     revalidatePath("/admin");
     return NextResponse.json({ ok: true });
   } catch (err) {
