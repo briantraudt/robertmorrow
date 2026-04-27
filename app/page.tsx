@@ -7,24 +7,39 @@ import {
   jsonLdScript,
   seoKeywords,
   siteDescription,
+  siteLongDescription,
   siteName,
 } from "@/lib/seo";
 
 export const revalidate = 60; // re-render at most every minute
 
 export const metadata: Metadata = {
-  title: "Texas Acrylic Landscape Paintings for Sale",
+  title: "Original Acrylic Paintings from Texas and New Mexico",
   description: siteDescription,
   keywords: seoKeywords,
   alternates: {
     canonical: "/",
   },
   openGraph: {
-    title: "Texas Acrylic Landscape Paintings for Sale — Robert Morrow",
+    title: "Original Acrylic Paintings from Texas and New Mexico — Robert Morrow",
     description: siteDescription,
     url: absoluteUrl("/"),
     siteName,
     type: "website",
+    images: [
+      {
+        url: absoluteUrl("/paintings/img_2395.jpg"),
+        width: 1800,
+        height: 1451,
+        alt: "Original acrylic painting by Robert Morrow",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Original Acrylic Paintings from Texas and New Mexico",
+    description: siteDescription,
+    images: [absoluteUrl("/paintings/img_2395.jpg")],
   },
 };
 
@@ -33,8 +48,8 @@ export default async function HomePage() {
   const collectionJsonLd = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
-    name: "Texas acrylic landscape paintings for sale",
-    description: siteDescription,
+    name: "Original acrylic paintings from Texas and New Mexico",
+    description: siteLongDescription,
     url: absoluteUrl("/"),
     about: [
       "Texas acrylic painting",

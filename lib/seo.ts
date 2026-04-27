@@ -8,7 +8,10 @@ export const artistName = "Robert Morrow";
 export const artistEmail = "robertmorrow2@verizon.net";
 
 export const siteDescription =
-  "Texas artist Robert Morrow paints acrylic landscapes and abstract works rooted in Spicewood, Texas, and the mountain light around Cloudcroft, New Mexico. Original paintings are available for sale.";
+  "Original acrylic paintings shaped by Texas Hill Country light and Cloudcroft mountain air. Browse available works, sizes, and prices direct from Robert Morrow.";
+
+export const siteLongDescription =
+  "Robert Morrow paints original acrylic landscapes and abstract works from Spicewood, Texas, and the mountain country around Cloudcroft, New Mexico.";
 
 export const seoKeywords = [
   "Robert Morrow artist",

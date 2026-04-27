@@ -20,7 +20,7 @@ import {
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "Robert Morrow — Texas Acrylic Landscape Paintings",
+    default: "Robert Morrow Paintings | Texas Hill Country Acrylics",
     template: "%s · Robert Morrow",
   },
   description: siteDescription,
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     canonical: "/",
   },
   openGraph: {
-    title: "Robert Morrow — Texas Acrylic Landscape Paintings",
+    title: "Robert Morrow Paintings | Texas Hill Country Acrylics",
     description: siteDescription,
     url: siteUrl,
     siteName,
@@ -46,7 +46,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Robert Morrow — Texas Acrylic Landscape Paintings",
+    title: "Robert Morrow Paintings | Texas Hill Country Acrylics",
     description: siteDescription,
     images: [absoluteUrl("/about/robert-morrow.jpg")],
   },
