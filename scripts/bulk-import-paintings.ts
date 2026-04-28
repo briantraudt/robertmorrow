@@ -17,7 +17,6 @@ config({ path: ".env.local" });
 
 const BUCKET = "paintings";
 const MAX_EDGE = 2200;
-const TRIM_THRESHOLD = 40;
 const DEFAULT_PRICE = 550;
 const LANDSCAPE_SIZE = { w: 24, h: 19 };
 const PORTRAIT_SIZE = { w: 18, h: 24 };
@@ -68,7 +67,6 @@ async function processImage(file: string, slug: string) {
   const input = await fs.readFile(file);
   const pipeline = sharp(input, { failOn: "none" })
     .rotate()
-    .trim({ threshold: TRIM_THRESHOLD })
     .resize({
       width: MAX_EDGE,
       height: MAX_EDGE,

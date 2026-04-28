@@ -31,11 +31,13 @@ export default function PaintingImage({
   priority,
   className,
   style,
-  imageFit = "cover",
+  imageFit = "contain",
   useGalleryThumb = false,
 }: Props) {
   const primary = painting.images?.find((i) => i.is_primary) ?? painting.images?.[0];
-  const aspect = painting.aspect || painting.w / painting.h;
+  const photoAspect =
+    primary?.width && primary?.height ? primary.width / primary.height : null;
+  const aspect = photoAspect || painting.aspect || painting.w / painting.h;
   const imageUrl =
     useGalleryThumb && primary?.url?.startsWith("/paintings/")
       ? primary.url.replace("/paintings/", "/paintings/thumbs/")
@@ -100,7 +102,7 @@ export default function PaintingImage({
       style={{
         position: "relative",
         width: "100%",
-        aspectRatio: `${painting.w} / ${painting.h}`,
+        aspectRatio: `${aspect}`,
         background: painting.palette?.[2] ?? "var(--paper-2)",
         overflow: "hidden",
         ...style,

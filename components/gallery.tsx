@@ -88,7 +88,7 @@ function GalleryCard({
             painting={painting}
             priority={index < 3}
             className="gallery-card-image"
-            imageFit="cover"
+            imageFit="contain"
             useGalleryThumb
           />
           <div

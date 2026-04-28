@@ -140,17 +140,17 @@ export default function PaintingForm({ mode, painting }: Props) {
     setError(null);
   }
 
-  async function uploadImage(): Promise<string | null> {
+  async function uploadImage(): Promise<{ url: string; width?: number; height?: number } | null> {
     if (!file) return null;
     const uploadFile = await prepareUploadFile(file);
     const fd = new FormData();
     fd.append("file", uploadFile);
     fd.append("filename", uploadFile.name);
     const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
-    const data = await readJson<{ error?: string; url?: string }>(res);
+    const data = await readJson<{ error?: string; url?: string; width?: number; height?: number }>(res);
     if (!res.ok) throw new Error(data.error || "Upload failed.");
     if (!data.url) throw new Error("Upload failed.");
-    return data.url;
+    return { url: data.url, width: data.width, height: data.height };
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -158,8 +158,8 @@ export default function PaintingForm({ mode, painting }: Props) {
     setError(null);
     setSaving(true);
     try {
-      let imageUrl: string | null = null;
-      if (file) imageUrl = await uploadImage();
+      let uploadedImage: { url: string; width?: number; height?: number } | null = null;
+      if (file) uploadedImage = await uploadImage();
 
       const payload: Record<string, string | number | null> = {
         title: form.title,
@@ -174,7 +174,11 @@ export default function PaintingForm({ mode, painting }: Props) {
         note: form.note || null,
       };
       if (form.sort_order) payload.sort_order = Number(form.sort_order);
-      if (imageUrl) payload.imageUrl = imageUrl;
+      if (uploadedImage) {
+        payload.imageUrl = uploadedImage.url;
+        payload.imageWidth = uploadedImage.width ?? null;
+        payload.imageHeight = uploadedImage.height ?? null;
+      }
 
       const url =
         mode === "create"
@@ -257,7 +261,7 @@ export default function PaintingForm({ mode, painting }: Props) {
               <img
                 src={preview}
                 alt="preview"
-                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                style={{ width: "100%", height: "100%", objectFit: "contain" }}
               />
             ) : (
               <span className="muted small-caps" style={{ fontSize: 10.5 }}>
