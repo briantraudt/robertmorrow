@@ -220,13 +220,13 @@ hr.hairline {
 
 /* ---------- Gallery (home) layout ---------- */
 .gallery-wrap {
-  max-width: 1440px;
+  max-width: 1760px;
   margin: 0 auto;
   padding: 56px 48px 120px;
 }
 .gallery-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 72px 56px;
   align-items: start;
 }
@@ -238,6 +238,14 @@ hr.hairline {
 }
 
 /* ---------- Responsive grid helpers ---------- */
+@media (max-width: 1500px) {
+  .gallery-wrap {
+    max-width: 1440px;
+  }
+  .gallery-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
 @media (max-width: 1180px) {
   .gallery-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
