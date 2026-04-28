@@ -222,7 +222,7 @@ export default function PaintingForm({ mode, painting }: Props) {
     if (!painting) return;
     if (
       !confirm(
-        `Delete "${painting.title}"? This cannot be undone. (Painting must have no offers on record.)`,
+        `Delete "${painting.title}"? This cannot be undone and will remove any related offer records.`,
       )
     ) {
       return;

@@ -1,6 +1,6 @@
 // =======================================================================
 // PATCH /api/admin/paintings/[id] — update fields and/or primary image
-// DELETE /api/admin/paintings/[id] — remove painting (refuses if offers exist)
+// DELETE /api/admin/paintings/[id] — remove painting and dependent records
 // =======================================================================
 
 import { NextResponse } from "next/server";
@@ -176,30 +176,41 @@ export async function DELETE(
   }
   try {
     const supabase = createServerSupabaseClient();
+    const { data: painting, error: findErr } = await supabase
+      .from("paintings")
+      .select("id, slug")
+      .eq("id", params.id)
+      .maybeSingle();
+    if (findErr) throw findErr;
 
-    // Guard: refuse delete if any offers reference this painting.
-    const { count: offerCount } = await supabase
-      .from("offers")
-      .select("id", { count: "exact", head: true })
-      .eq("painting_id", params.id);
-    if ((offerCount ?? 0) > 0) {
-      return NextResponse.json(
-        {
-          error:
-            "This painting has offers on record. Mark it as sold or archived instead of deleting.",
-        },
-        { status: 409 },
-      );
+    if (!painting) {
+      return NextResponse.json({ error: "Painting not found." }, { status: 404 });
     }
 
-    // Remove image rows first (storage objects remain — cheap, and we keep
-    // them as backup).
-    await supabase.from("painting_images").delete().eq("painting_id", params.id);
-    const { error } = await supabase.from("paintings").delete().eq("id", params.id);
+    // Remove dependent rows explicitly so admin deletion works even if the
+    // deployed database was created before the cascade constraints existed.
+    const { error: offersErr } = await supabase
+      .from("offers")
+      .delete()
+      .eq("painting_id", params.id);
+    if (offersErr) throw offersErr;
+
+    // Storage objects remain — cheap, and useful as a backup if a deletion was accidental.
+    const { error: imagesErr } = await supabase
+      .from("painting_images")
+      .delete()
+      .eq("painting_id", params.id);
+    if (imagesErr) throw imagesErr;
+
+    const { error } = await supabase
+      .from("paintings")
+      .delete()
+      .eq("id", params.id);
     if (error) throw error;
 
     revalidatePath("/");
     revalidatePath("/admin");
+    revalidatePath(`/paintings/${painting.slug}`);
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[api/admin/paintings DELETE]", err);
