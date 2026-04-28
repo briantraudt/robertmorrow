@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { findPainting as seedFind } from "@/lib/seed-data";
+import { DELETED_PAINTING_NOTE } from "@/lib/deleted-painting";
 import { revalidatePath } from "next/cache";
 import { forbiddenOriginResponse, isSameOrigin } from "@/lib/security";
 
@@ -183,34 +184,61 @@ export async function DELETE(
       .maybeSingle();
     if (findErr) throw findErr;
 
-    if (!painting) {
+    const seed = seedFind(params.id) || (painting?.slug ? seedFind(painting.slug) : undefined);
+
+    if (!painting && !seed) {
       return NextResponse.json({ error: "Painting not found." }, { status: 404 });
     }
+    const paintingId = painting?.id ?? seed!.id;
+    const paintingSlug = painting?.slug ?? seed!.slug;
 
     // Remove dependent rows explicitly so admin deletion works even if the
     // deployed database was created before the cascade constraints existed.
     const { error: offersErr } = await supabase
       .from("offers")
       .delete()
-      .eq("painting_id", params.id);
+      .eq("painting_id", paintingId);
     if (offersErr) throw offersErr;
 
     // Storage objects remain — cheap, and useful as a backup if a deletion was accidental.
     const { error: imagesErr } = await supabase
       .from("painting_images")
       .delete()
-      .eq("painting_id", params.id);
+      .eq("painting_id", paintingId);
     if (imagesErr) throw imagesErr;
 
-    const { error } = await supabase
-      .from("paintings")
-      .delete()
-      .eq("id", params.id);
-    if (error) throw error;
+    if (seed) {
+      const { error: tombstoneErr } = await supabase.from("paintings").upsert(
+        {
+          id: seed.id,
+          slug: seed.slug,
+          title: seed.title,
+          year: seed.year,
+          series: seed.series,
+          medium: seed.medium,
+          w: seed.w,
+          h: seed.h,
+          price: seed.price,
+          status: seed.status,
+          framing: seed.framing ?? null,
+          note: DELETED_PAINTING_NOTE,
+          palette: seed.palette ?? null,
+          aspect: seed.aspect ?? null,
+        },
+        { onConflict: "id" },
+      );
+      if (tombstoneErr) throw tombstoneErr;
+    } else {
+      const { error } = await supabase
+        .from("paintings")
+        .delete()
+        .eq("id", paintingId);
+      if (error) throw error;
+    }
 
     revalidatePath("/");
     revalidatePath("/admin");
-    revalidatePath(`/paintings/${painting.slug}`);
+    revalidatePath(`/paintings/${paintingSlug}`);
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[api/admin/paintings DELETE]", err);

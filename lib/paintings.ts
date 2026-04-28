@@ -6,6 +6,7 @@
 
 import "server-only";
 import { createServerSupabaseClient } from "./supabase/server";
+import { DELETED_PAINTING_NOTE } from "./deleted-painting";
 import { SEED_PAINTINGS, findPainting as seedFind } from "./seed-data";
 import type { Painting } from "./types";
 
@@ -142,12 +143,14 @@ export async function getPaintings(): Promise<Painting[]> {
     if (rows.length === 0) return sortForGallery(SEED_PAINTINGS);
 
     const dbSeedKeys = new Set(rows.flatMap((p) => [p.id, p.slug]));
-    const dbPaintings = rows.map((p) =>
-      withDefaultFraming(mergeSeedImagesForList({
-        ...(p as unknown as Painting),
-        images: byPainting.get(p.id) ?? [],
-      })),
-    );
+    const dbPaintings = rows
+      .filter((p) => p.note !== DELETED_PAINTING_NOTE)
+      .map((p) =>
+        withDefaultFraming(mergeSeedImagesForList({
+          ...(p as unknown as Painting),
+          images: byPainting.get(p.id) ?? [],
+        })),
+      );
     const missingSeedPaintings = SEED_PAINTINGS.filter(
       (p) => !dbSeedKeys.has(p.id) && !dbSeedKeys.has(p.slug),
     );
@@ -208,6 +211,9 @@ export async function getPainting(
       throw error;
     }
     if (painting) {
+      if ((painting as Partial<Painting>).note === DELETED_PAINTING_NOTE) {
+        return null;
+      }
       if (seedPainting) {
         return withDefaultFraming(mergeSeedWithDb(seedPainting, painting as unknown as Partial<Painting>));
       }
