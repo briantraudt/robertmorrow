@@ -25,6 +25,7 @@ type FormState = {
 };
 
 const CLIENT_UPLOAD_MAX_BYTES = 3.75 * 1024 * 1024;
+const CLIENT_DIRECT_UPLOAD_MAX_BYTES = 12 * 1024 * 1024;
 const CLIENT_IMAGE_MAX_EDGE = 2200;
 const CLIENT_JPEG_QUALITIES = [0.86, 0.76, 0.66];
 
@@ -70,7 +71,19 @@ function canvasToBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob>
   });
 }
 
+function isHeicFile(file: File) {
+  return (
+    /hei[cf]/i.test(file.type) ||
+    /\.(heic|heif)$/i.test(file.name)
+  );
+}
+
 async function prepareUploadFile(file: File): Promise<File> {
+  if (isHeicFile(file)) {
+    if (file.size <= CLIENT_DIRECT_UPLOAD_MAX_BYTES) return file;
+    throw new Error("That HEIC image is too large to upload. Choose a file under 12 MB or export it as a JPEG first.");
+  }
+
   if (file.size <= CLIENT_UPLOAD_MAX_BYTES && file.type === "image/jpeg") {
     return file;
   }
@@ -135,8 +148,12 @@ export default function PaintingForm({ mode, painting }: Props) {
     const f = e.target.files?.[0];
     if (!f) return;
     setFile(f);
-    setPreview(URL.createObjectURL(f));
-    setSelectedFileLabel(`${f.name} selected; it will be compressed before upload.`);
+    setPreview(isHeicFile(f) ? null : URL.createObjectURL(f));
+    setSelectedFileLabel(
+      isHeicFile(f)
+        ? `${f.name} selected; it will be converted to JPEG after upload.`
+        : `${f.name} selected; it will be compressed before upload.`,
+    );
     setError(null);
   }
 
@@ -265,7 +282,7 @@ export default function PaintingForm({ mode, painting }: Props) {
               />
             ) : (
               <span className="muted small-caps" style={{ fontSize: 10.5 }}>
-                Click to upload
+                {file && isHeicFile(file) ? "HEIC selected" : "Click to upload"}
               </span>
             )}
           </div>
@@ -289,11 +306,11 @@ export default function PaintingForm({ mode, painting }: Props) {
                 paddingBottom: 2,
               }}
             >
-              {preview ? "Replace image" : "Choose image"}
+              {preview || selectedFileLabel ? "Replace image" : "Choose image"}
             </button>
           </div>
           <p className="muted" style={{ fontSize: 11, marginTop: 10, lineHeight: 1.5 }}>
-            JPEG, PNG, WebP, or HEIC — large photos are compressed before upload.
+            JPEG, PNG, WebP, or HEIC — large photos are compressed before upload; HEIC photos are converted on the server.
           </p>
           {selectedFileLabel ? (
             <p className="muted" style={{ fontSize: 11, marginTop: 8, lineHeight: 1.5 }}>
