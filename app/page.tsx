@@ -14,14 +14,14 @@ import {
 export const revalidate = 60; // re-render at most every minute
 
 export const metadata: Metadata = {
-  title: "Original Acrylic Paintings from Texas and New Mexico",
+  title: "Robert Morrow Paintings from Spicewood, Texas",
   description: siteDescription,
   keywords: seoKeywords,
   alternates: {
     canonical: "/",
   },
   openGraph: {
-    title: "Original Acrylic Paintings from Texas and New Mexico — Robert Morrow",
+    title: "Robert Morrow Paintings from Spicewood, Texas",
     description: siteDescription,
     url: absoluteUrl("/"),
     siteName,
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Original Acrylic Paintings from Texas and New Mexico",
+    title: "Robert Morrow Paintings from Spicewood, Texas",
     description: siteDescription,
     images: [absoluteUrl("/paintings/img_2395.jpg")],
   },
@@ -48,14 +48,15 @@ export default async function HomePage() {
   const collectionJsonLd = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
-    name: "Original acrylic paintings from Texas and New Mexico",
+    name: "Robert Morrow paintings from Spicewood, Texas",
     description: siteLongDescription,
     url: absoluteUrl("/"),
     about: [
       "Texas acrylic painting",
       "Landscape paintings for sale",
       "Spicewood Texas artist",
-      "Cloudcroft New Mexico landscapes",
+      "Texas Hill Country landscapes",
+      "Texas sky paintings",
     ],
     creator: { "@id": absoluteUrl("/about#artist") },
     mainEntity: {

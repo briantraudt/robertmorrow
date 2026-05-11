@@ -5,7 +5,7 @@ import { absoluteUrl, seoKeywords } from "@/lib/seo";
 export const metadata: Metadata = {
   title: "Contact Robert Morrow",
   description:
-    "Contact Texas artist Robert Morrow about available acrylic paintings, local delivery, or shipping for original landscape paintings.",
+    "Contact Robert Morrow, a Spicewood, Texas artist whose paintings are rooted in the Hill Country landscape, open water, hard sun, scrub oak, limestone, and Texas sky.",
   keywords: [
     ...seoKeywords,
     "contact Robert Morrow",
@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Contact Robert Morrow",
     description:
-      "Write to Texas artist Robert Morrow about original acrylic paintings for sale.",
+      "Write to Spicewood, Texas artist Robert Morrow about original acrylic paintings.",
     url: absoluteUrl("/contact"),
   },
 };
@@ -74,8 +74,6 @@ export default function ContactPage({
             </div>
             <div className="serif" style={{ fontSize: 18, lineHeight: 1.5 }}>
               Spicewood, TX
-              <br />
-              Cloudcroft, NM
             </div>
           </div>
           <div>

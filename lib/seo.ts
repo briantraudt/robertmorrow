@@ -8,21 +8,23 @@ export const artistName = "Robert Morrow";
 export const artistEmail = "robertmorrow2@verizon.net";
 
 export const siteDescription =
-  "Original acrylic paintings shaped by Texas Hill Country light and Cloudcroft mountain air. Browse available works, sizes, and prices direct from Robert Morrow.";
+  "Robert Morrow lives and works in Spicewood, Texas, west of Austin in the Hill Country. His paintings are rooted in limestone, scrub oak, hard sun, open water, and the shifting color of the Texas sky.";
 
 export const siteLongDescription =
-  "Robert Morrow paints original acrylic landscapes and abstract works from Spicewood, Texas, and the mountain country around Cloudcroft, New Mexico.";
+  "Robert Morrow lives and works in Spicewood, Texas, west of Austin in the Hill Country. His paintings are rooted in that landscape: limestone, scrub oak, hard sun, open water, and the shifting color of the Texas sky.";
 
 export const seoKeywords = [
   "Robert Morrow artist",
-  "Texas artist",
   "Spicewood Texas artist",
+  "Texas Hill Country artist",
   "Austin Hill Country artist",
+  "Spicewood painter",
+  "Texas sky paintings",
+  "Hill Country painter",
   "Texas acrylic paintings",
   "acrylic landscape paintings",
   "original acrylic paintings for sale",
   "Texas landscape paintings for sale",
-  "Cloudcroft New Mexico landscapes",
   "contemporary landscape painting",
   "abstract acrylic paintings",
 ];
@@ -47,7 +49,7 @@ export function paintingDescription(painting: Painting) {
         ? `Available for sale for $${painting.price}.`
         : "Available for sale; price on request.";
 
-  return `${paintingTitle(painting)} is an original ${painting.medium.toLowerCase()} by Texas artist Robert Morrow. ${size}. Inspired by the Texas Hill Country around Spicewood and the landscapes of Cloudcroft, New Mexico. ${priceText}`;
+  return `${paintingTitle(painting)} is an original ${painting.medium.toLowerCase()} by Spicewood, Texas artist Robert Morrow. ${size}. Rooted in the Texas Hill Country landscape: limestone, scrub oak, hard sun, open water, and the shifting color of the Texas sky. ${priceText}`;
 }
 
 export function artistJsonLd() {
@@ -69,16 +71,13 @@ export function artistJsonLd() {
         "@type": "Place",
         name: "Spicewood, Texas",
       },
-      {
-        "@type": "Place",
-        name: "Cloudcroft, New Mexico",
-      },
     ],
     knowsAbout: [
       "Acrylic painting",
       "Texas landscape painting",
       "Hill Country landscapes",
-      "Cloudcroft New Mexico landscapes",
+      "Spicewood Texas landscapes",
+      "Texas sky paintings",
       "Contemporary landscape painting",
     ],
   };

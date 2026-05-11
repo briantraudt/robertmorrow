@@ -14,8 +14,7 @@ export default function AboutSection() {
           maxWidth: 900,
         }}
       >
-        Robert Morrow paints from the Hill Country, with one eye toward the
-        mountains.
+        Robert Morrow paints from Spicewood, Texas, in the Hill Country.
       </h1>
 
       <div
@@ -74,9 +73,8 @@ export default function AboutSection() {
               color: "var(--ink-2)",
             }}
           >
-            These paintings come out of long looking: the dry light of Central
-            Texas, the high-country air of New Mexico, and the quiet discipline
-            of returning to the same questions over time.
+            These paintings come out of long looking: limestone, scrub oak,
+            hard sun, open water, and the shifting color of the Texas sky.
           </p>
           <p>
             Robert Morrow lives and works in Spicewood, Texas, west of Austin
@@ -85,16 +83,9 @@ export default function AboutSection() {
             of the Texas sky.
           </p>
           <p>
-            Each summer, Robert spends time in Cloudcroft, New Mexico, where
-            the Sacramento Mountains offer a different kind of light and
-            distance. Many of the landscapes begin there, from mountain roads,
-            tree lines, weather, and the sudden changes between shadow and sun.
-          </p>
-          <p>
-            Robert studied art in California and has continued painting
-            steadily for decades. He works primarily in acrylic on canvas,
-            building small compositions through color, memory, and observation
-            rather than strict description.
+            He works primarily in acrylic on canvas, building small
+            compositions through color, memory, and observation rather than
+            strict description.
           </p>
           <p>
             The works are signed on the front and inscribed on the back with

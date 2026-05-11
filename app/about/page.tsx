@@ -3,22 +3,22 @@ import AboutSection from "@/components/about-section";
 import { absoluteUrl, seoKeywords } from "@/lib/seo";
 
 export const metadata: Metadata = {
-  title: "About Texas Artist Robert Morrow",
+  title: "About Robert Morrow, Spicewood Texas Artist",
   description:
-    "Learn about Robert Morrow, a Spicewood, Texas artist painting original acrylic landscapes inspired by the Texas Hill Country and Cloudcroft, New Mexico.",
+    "Robert Morrow lives and works in Spicewood, Texas, west of Austin in the Hill Country. His paintings are rooted in limestone, scrub oak, hard sun, open water, and the shifting color of the Texas sky.",
   keywords: [
     ...seoKeywords,
     "about Robert Morrow",
     "Texas Hill Country painter",
-    "California art school artist",
+    "Spicewood Texas painter",
   ],
   alternates: {
     canonical: "/about",
   },
   openGraph: {
-    title: "About Texas Artist Robert Morrow",
+    title: "About Robert Morrow, Spicewood Texas Artist",
     description:
-      "Robert Morrow paints original acrylic landscapes rooted in Spicewood, Texas, and Cloudcroft, New Mexico.",
+      "Robert Morrow lives and works in Spicewood, Texas, west of Austin in the Hill Country. His paintings are rooted in limestone, scrub oak, hard sun, open water, and the shifting color of the Texas sky.",
     url: absoluteUrl("/about"),
     images: [
       {
