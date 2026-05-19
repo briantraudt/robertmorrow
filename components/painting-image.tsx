@@ -38,8 +38,11 @@ export default function PaintingImage({
   const photoAspect =
     primary?.width && primary?.height ? primary.width / primary.height : null;
   const aspect = photoAspect || painting.aspect || painting.w / painting.h;
+  const usePinBallGalleryImage = useGalleryThumb && painting.slug === "pin-ball";
   const imageUrl =
-    useGalleryThumb && primary?.url?.startsWith("/paintings/")
+    usePinBallGalleryImage
+      ? "/paintings/thumbs/pin-ball-gallery.jpg"
+      : useGalleryThumb && primary?.url?.startsWith("/paintings/")
       ? primary.url.replace("/paintings/", "/paintings/thumbs/")
       : primary?.url;
 
@@ -119,7 +122,6 @@ export default function PaintingImage({
             width: "100%",
             height: "100%",
             objectFit: imageFit,
-            filter: useGalleryThumb ? "blur(0.18px)" : undefined,
           }}
         />
       ) : placeholder ? (
