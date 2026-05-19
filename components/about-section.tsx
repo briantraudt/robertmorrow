@@ -87,12 +87,6 @@ export default function AboutSection() {
             compositions through color, memory, and observation rather than
             strict description.
           </p>
-          <p>
-            The works are signed on the front and inscribed on the back with
-            title, date, and number. They ship flat-packed and unframed unless
-            you write to ask otherwise.
-          </p>
-
           <div
             style={{
               marginTop: 16,
