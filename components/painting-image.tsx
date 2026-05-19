@@ -119,6 +119,7 @@ export default function PaintingImage({
             width: "100%",
             height: "100%",
             objectFit: imageFit,
+            filter: useGalleryThumb ? "blur(0.18px)" : undefined,
           }}
         />
       ) : placeholder ? (

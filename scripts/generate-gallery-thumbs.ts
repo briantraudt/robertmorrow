@@ -5,7 +5,7 @@ import sharp from "sharp";
 const root = process.cwd();
 const paintingsDir = path.join(root, "public", "paintings");
 const thumbsDir = path.join(paintingsDir, "thumbs");
-const THUMB_WIDTH = 720;
+const THUMB_WIDTH = 1440;
 
 async function main() {
   await mkdir(thumbsDir, { recursive: true });
