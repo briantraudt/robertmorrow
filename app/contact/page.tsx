@@ -78,14 +78,6 @@ export default function ContactPage({
           </div>
           <div>
             <div className="small-caps muted" style={{ fontSize: 10, marginBottom: 10 }}>
-              Direct
-            </div>
-            <div className="serif" style={{ fontSize: 18, lineHeight: 1.5 }}>
-              robertmorrow2<span className="muted">@</span>verizon.net
-            </div>
-          </div>
-          <div>
-            <div className="small-caps muted" style={{ fontSize: 10, marginBottom: 10 }}>
               Response time
             </div>
             <p style={{ fontSize: 14, lineHeight: 1.7 }}>
