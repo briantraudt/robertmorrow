@@ -44,7 +44,7 @@ export const metadata: Metadata = {
 };
 
 export default async function HomePage() {
-  const paintings = (await getPaintings()).filter((p) => p.status !== "sold");
+  const paintings = await getPaintings();
   const collectionJsonLd = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
