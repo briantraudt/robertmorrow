@@ -22,7 +22,7 @@ cp .env.local.example .env.local
 npm run dev
 ```
 
-Use an isolated Supabase project and Stripe test-mode credentials for development. Apply `supabase/schema.sql`, then `supabase/inventory.sql`. The live catalog requires a working database; it never falls back to seeded saleable inventory after a database error. Seed image URLs remain an image-only fallback for existing database records. The seed scripts are manual setup utilities and must not be run against an established production catalog.
+Use an isolated Supabase project and Stripe test-mode credentials for development. Apply `supabase/schema.sql`, then `supabase/inventory.sql` and `supabase/inventory-webhook-vault.sql`. The live catalog requires a working database; it never falls back to seeded saleable inventory after a database error. Seed image URLs remain an image-only fallback for existing database records. The seed scripts are manual setup utilities and must not be run against an established production catalog.
 
 ### Environment
 
@@ -33,7 +33,7 @@ Use an isolated Supabase project and Stripe test-mode credentials for developmen
 | `SUPABASE_SERVICE_ROLE_KEY` | Server-only database access |
 | `STRIPE_SECRET_KEY` | Server-only Stripe key |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Matching Stripe public key |
-| `STRIPE_WEBHOOK_SECRET` | Signing secret for this site's webhook endpoint |
+| `STRIPE_WEBHOOK_SECRET` | Legacy/local signing-secret fallback before a dedicated encrypted Vault configuration exists |
 | `NEXT_PUBLIC_SITE_URL` | Canonical absolute origin, production `https://www.robertmorrow.art` |
 | `ADMIN_PASSWORD` | Studio password |
 | `ADMIN_SESSION_SECRET` | Separate random signing secret for expiring Studio sessions |
@@ -54,9 +54,9 @@ The webhook URL is `https://www.robertmorrow.art/api/webhook`. Subscribe to:
 - `checkout.session.expired`
 - `checkout.session.async_payment_succeeded`
 
-The handler verifies the raw-body signature and provider payment status. Database fulfillment errors return HTTP 500 for Stripe retries. Neither a failed card attempt nor elapsed time alone releases a painting.
+The dedicated production webhook secret is created and saved server-side in Supabase Vault, encrypted at rest. Narrow RPCs expose only this one credential to the service role; no operator response contains it. The handler reads Vault before verifying the raw-body signature and provider payment status. A Vault lookup failure returns a retryable error rather than silently using an older secret. Database fulfillment errors return HTTP 500 for Stripe retries. Neither a failed card attempt nor elapsed time alone releases a painting.
 
-`vercel.json` schedules `GET /api/cron/inventory` every 10 minutes. Vercel supplies `Authorization: Bearer <CRON_SECRET>`. The same authenticated endpoint supports `GET ?audit=1` for redacted provider/configuration counts and `POST {"action":"reconcile_legacy"}` for retiring this site's older unpaid attempts and reusable offer links. Reconciliation records verified historical successes; it never charges a card or refunds a payment. Follow any incomplete-history, processing, or error counts before reopening checkout.
+`vercel.json` schedules `GET /api/cron/inventory` every 10 minutes. Vercel supplies `Authorization: Bearer <CRON_SECRET>`. The same authenticated endpoint supports `GET ?audit=1` for redacted provider/configuration counts and `POST {"action":"reconcile_legacy"}` for retiring this site's older unpaid attempts and reusable offer links. Reconciliation records verified historical successes; it never charges a card or refunds a payment. Follow any incomplete-history, processing, or error counts before reopening checkout. The protected `install_webhook` action works only with checkout paused and stores the newly issued Stripe secret directly in Vault. `verify_webhook` sends a signed no-op to the real handler and records successful verification. Only then can `retire_legacy_webhooks` with the verified replacement ID disable the two exact audited legacy registrations; unrelated endpoints are excluded.
 
 Cart checkout collects a US delivery address. Accepted-offer Checkout Sessions retain the existing US/Canada address support. The painting price is charged; the site describes free local delivery and shipping available on request. Any shipping quote is arranged separately. Stripe receipt delivery depends on the Stripe account's receipt settings; the success page only promises the payment state verified by the application.
 
@@ -85,6 +85,7 @@ node --import tsx tests/checkout-validation.test.ts
 node --import tsx tests/payment-orchestration.test.ts
 node --import tsx tests/checkout-ui.test.ts
 node --import tsx tests/inventory-maintenance.test.ts
+node --import tsx tests/inventory-webhooks.test.ts
 ```
 
 The real Postgres suites cover transaction and concurrency guarantees. Run them only against a disposable test database. `tests/inventory.sql` requires the base schema and inventory migration and rolls its fixtures back. `tests/inventory_concurrency.py` creates and drops its own temporary database using a privileged test connection; see its environment configuration at the top of the file.

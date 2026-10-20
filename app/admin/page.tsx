@@ -6,6 +6,7 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/admin-auth";
 import { getPaintings } from "@/lib/paintings";
 import AdminChrome from "@/components/admin/admin-chrome";
+import RecentOrders, { type StudioOrder } from "@/components/admin/recent-orders";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic"; // always fresh on admin
@@ -18,7 +19,12 @@ export default async function AdminHome() {
     .select("id, token, painting_id, name, amount, status, created_at")
     .order("created_at", { ascending: false })
     .limit(25);
-  if (offersError) console.error("[admin] Could not load recent offers", offersError);
+  if (offersError) console.error("[admin] Could not load recent offers", { code: offersError.code });
+  const { data: orders, error: ordersError } = await createServerSupabaseClient()
+    .from("orders")
+    .select("id, created_at, painting_ids, name, email, amount_total, currency, stripe_payment_intent, stripe_session_id, shipping_address")
+    .eq("status", "paid").order("created_at", { ascending: false }).limit(25);
+  if (ordersError) console.error("[admin] Could not load recent orders", { code: ordersError.code });
 
   const available = paintings.filter((p) => p.status === "available").length;
   const sold = paintings.filter((p) => p.status === "sold").length;
@@ -41,6 +47,7 @@ export default async function AdminHome() {
           </h1>
           <p className="muted" style={{ fontSize: 13 }}>
             {paintings.length} total · {available} available · {reserved} reserved · {sold} sold
+            {" · "}<a href="#studio-orders-title" style={{ textDecoration: "underline" }}>Recent orders</a>
           </p>
         </div>
         <Link
@@ -149,6 +156,7 @@ export default async function AdminHome() {
           );
         })}
       </div>
+      <RecentOrders orders={(orders ?? []) as StudioOrder[]} paintings={paintings} unavailable={!!ordersError} />
       <section style={{ marginTop: 48 }} aria-labelledby="studio-offers-title">
         <h2 id="studio-offers-title" className="serif" style={{ fontSize: 30, fontWeight: 400, marginBottom: 18 }}>
           Recent offers

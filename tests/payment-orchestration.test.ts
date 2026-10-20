@@ -10,6 +10,7 @@ const RESERVATION = "11111111-1111-4111-8111-111111111111";
 const SECOND_RESERVATION = "22222222-2222-4222-8222-222222222222";
 const INTENT = "pi_test_one_original";
 const SESSION = "cs_test_abcdefghijklmnopqrstuvwxyz";
+const WEBHOOK_SIGNATURE = `t=1700000000,v1=${"a".repeat(64)}`;
 const clone = <T>(value: T): T => structuredClone(value);
 let api: any;
 const originalFetch = globalThis.fetch;
@@ -29,6 +30,7 @@ before(async () => {
     "next/server": 'export class NextResponse extends Response { static json(value, init) { return new NextResponse(JSON.stringify(value), { ...init, headers: {"content-type":"application/json", ...init?.headers} }); } }',
     "test-stripe": 'import {ports} from "test-ports"; export function getStripe() { return ports.stripe; }',
     "test-database": 'import {ports} from "test-ports"; export function createServerSupabaseClient() { return ports.db; }',
+    "test-webhook-secret": 'import {ports} from "test-ports"; export async function getInventoryWebhookSecret() { ports.calls.push({kind:"webhook:secret", args:[]}); return ports.resolveWebhookSecret(); }',
     "test-catalog": 'import {ports} from "test-ports"; export async function getPaintings() { return ports.catalog; }',
     "test-seo": 'export const siteUrl = "https://art.test.invalid";',
     "test-security": 'import { NextResponse } from "next/server"; export const isSameOrigin = () => true; export const rateLimit = () => ({ok: true, retryAfter: 0}); export const rateLimitResponse = () => NextResponse.json({}, {status:429}); export const forbiddenOriginResponse = () => NextResponse.json({}, {status:403});',
@@ -60,6 +62,7 @@ before(async () => {
           if (id === "@/lib/paintings") id = "test-catalog";
           if (id === "./seo" || id === "@/lib/seo") id = "test-seo";
           if (id === "@/lib/security") id = "test-security";
+          if (id === "@/lib/inventory-webhooks") id = "test-webhook-secret";
           if (id in stubs) return { path: id, namespace: "test-port" };
           return undefined;
         });
@@ -112,8 +115,13 @@ function fixture(input = reservation()) {
     invalidations: [], calls, stored, nextIntent: intent(), nextSession: session(), expired: [],
     catalog: [{ id: "original-one", slug: "morning", title: "Morning", price: 999, status: "reserved", images: [] }],
     rpcHandler: null, createHandler: null, retrieveHandler: null, cancelHandler: null,
+    webhookSecret: "whsec_synthetic_test_only", secretError: null,
   };
   const record = (kind: string, ...args: any[]) => calls.push({ kind, args: clone(args) });
+  ports.resolveWebhookSecret = async () => {
+    if (ports.secretError) throw ports.secretError;
+    return ports.webhookSecret;
+  };
   ports.db = {
     async rpc(name: string, args: any) {
       record(`rpc:${name}`, args);
@@ -151,7 +159,7 @@ function fixture(input = reservation()) {
     } },
     webhooks: { constructEvent(raw: string, signature: string, secret: string) {
       record("stripe:signature", raw, signature, secret);
-      if (signature !== "synthetic-signature" || secret !== "whsec_synthetic_test_only") throw new Error("Invalid signature.");
+      if (signature !== WEBHOOK_SIGNATURE || secret !== ports.webhookSecret) throw new Error("Invalid signature.");
       return JSON.parse(raw);
     } },
   };
@@ -163,7 +171,7 @@ function count(ports: any, kind: string) { return ports.calls.filter((call: any)
 function jsonRequest(path: string, body: unknown, raw = false) {
   return new Request(`https://art.test.invalid${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: raw ? String(body) : JSON.stringify(body) });
 }
-function eventRequest(object = intent({ status: "succeeded" }), signature = "synthetic-signature") {
+function eventRequest(object = intent({ status: "succeeded" }), signature = WEBHOOK_SIGNATURE) {
   return new Request("https://art.test.invalid/api/webhook", { method: "POST", headers: { "stripe-signature": signature }, body: JSON.stringify({ id: "evt_synthetic", type: "payment_intent.succeeded", data: { object } }) });
 }
 
@@ -311,6 +319,30 @@ test("bad webhook signatures never touch inventory; database failures request a 
   assert.equal((await api.webhookPost(eventRequest())).status, 500);
   assert.equal(count(f, "rpc:finalize_inventory_sale"), 1);
   assert.equal(count(f, "rpc:release_inventory"), 0);
+});
+
+test("webhook secret lookup failures return 503 without signature processing or inventory writes", async () => {
+  const f = fixture();
+  f.secretError = new Error("Synthetic Vault outage");
+  const unavailable = await api.webhookPost(eventRequest());
+  assert.equal(unavailable.status, 503);
+  assert.equal(count(f, "webhook:secret"), 1);
+  assert.equal(count(f, "stripe:signature"), 0);
+  assert.equal(count(f, "rpc:finalize_inventory_sale"), 0);
+  assert.equal((await unavailable.text()).includes("Vault"), false);
+});
+
+test("webhooks use the internally resolved secret and reject absent or malformed signatures before lookup", async () => {
+  const f = fixture(reservation({ status: "active", stripe_payment_intent: INTENT }));
+  const missing = new Request("https://art.test.invalid/api/webhook", { method: "POST", body: "{}" });
+  assert.equal((await api.webhookPost(missing)).status, 400);
+  assert.equal((await api.webhookPost(eventRequest(intent(), "not-a-signature"))).status, 400);
+  assert.equal(count(f, "webhook:secret"), 0);
+  f.webhookSecret = "whsec_syntheticStoredSecret";
+  assert.equal((await api.webhookPost(eventRequest())).status, 200);
+  const verified = f.calls.find((call: any) => call.kind === "stripe:signature");
+  assert.equal(verified.args[2], "whsec_syntheticStoredSecret");
+  assert.equal(count(f, "rpc:finalize_inventory_sale"), 1);
 });
 
 test("duplicate successful callbacks use the same single transactional finalization command", async () => {

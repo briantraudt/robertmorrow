@@ -2,14 +2,23 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
 import { finalizePayment, finalizeSession, getReservation, cancelReservation } from "@/lib/inventory";
+import { getInventoryWebhookSecret } from "@/lib/inventory-webhooks";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 export async function POST(req: Request) {
-  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+  const signature = req.headers.get("stripe-signature");
+  if (!signature || signature.length > 4096
+    || !/(?:^|,)\s*t=\d+(?:\s*,|\s*$)/.test(signature)
+    || !/(?:^|,)\s*v1=[a-f0-9]{64}(?:\s*,|\s*$)/i.test(signature)) {
+    return NextResponse.json({ error: "Invalid webhook signature." }, { status: 400 });
+  }
+  let secret: string | undefined;
+  try { secret = await getInventoryWebhookSecret(); }
+  catch { return NextResponse.json({ error: "Payment webhook is unavailable." }, { status: 503 }); }
   if (!secret) return NextResponse.json({ error: "Payment webhook is unavailable." }, { status: 503 });
   let event: Stripe.Event;
-  try { event = getStripe().webhooks.constructEvent(await req.text(), req.headers.get("stripe-signature") ?? "", secret); }
+  try { event = getStripe().webhooks.constructEvent(await req.text(), signature, secret); }
   catch { return NextResponse.json({ error: "Invalid webhook signature." }, { status: 400 }); }
   try {
     if (event.type === "payment_intent.succeeded") {

@@ -34,9 +34,11 @@ The home gallery excludes sold work; direct pages preserve history while disabli
 - Real concurrent Postgres suite: 9 independent-connection race scenarios, including simultaneous buyers, overlapping carts, offer-versus-cart, repeated finalization, legacy payment conflicts, and admin races.
 - Admin validation/session suite: 9 passing cases.
 - Checkout input suite: 4 passing cases.
-- Payment orchestration suite: 14 passing cases using actual application modules with isolated Stripe/database/network ports.
+- Payment orchestration suite: 16 passing cases using actual application modules with isolated Stripe/database/network ports.
 - Checkout UI suite: 11 passing cases rendering actual checkout/success components with isolated network, router, and Stripe ports.
 - Legacy-provider maintenance suite: 6 passing cases for pagination, mutation ordering, races, processing states, errors, and incomplete-history reporting.
+- Webhook setup, encrypted credential handling, and signed-delivery suite: 18 passing cases, including a real Stripe HMAC check against the actual handler with isolated transport.
+- Encrypted Vault round-trip, access restrictions, idempotent setup, verification marking, and encryption-at-rest checks passed using synthetic data in a rolled-back transaction; no synthetic configuration or secret remained.
 - TypeScript checks and optimized production build passed.
 
 Tests deliberately exercise duplicate delivery, request/response loss, payment success racing cancellation, processing payments, provider failures, database failures, invalid signatures, stale UI state, immutable pricing, and the deployment checkout gate. Mocked provider tests complement the actual database concurrency tests; they are not described as real card charges.
@@ -45,8 +47,14 @@ Tests deliberately exercise duplicate delivery, request/response loss, payment s
 
 No real buyer was charged, no live test contact/offer email was sent, and no real painting was bought as an audit test. Email API acceptance and actual inbox delivery are different outcomes. Admin mutation tests used fixtures and isolated dependencies; existing inventory was preserved by the schema migration. Browser automation supports desktop interaction here; responsive source containment was checked, while real mobile-device validation remains a separate device test.
 
-The production dependency scan excludes developer-only packages. Any remaining developer-tool advisory must be assessed separately from deployed runtime packages. Check dependency advisories again during routine maintenance because the registry changes over time.
+The production dependency scan is clean. The full development dependency scan reports five high-severity dependency entries stemming from one unpatched `braces` nested-pattern denial-of-service advisory (GHSA-vfj7-8cjw-p6xm) in ESLint tooling. This tooling is not a deployed runtime dependency. The registry offered a major configuration downgrade rather than a patched braces release; no unrelated framework downgrade was applied. Recheck this advisory during dependency maintenance.
 
 The recovery cron and webhook should remain enabled. Inspect failed webhook deliveries and inventory-recovery errors promptly; uncertainty intentionally keeps an original reserved. Card processors, email delivery, and hosting can fail independently, so no finite audit guarantees every future transaction.
 
 Deployment validation, legacy-provider reconciliation, and final live checks are recorded with the release commit and operational handoff.
+
+## Live reconciliation findings
+
+The release audit found three historical live Stripe PaymentIntents: two unpaid attempts and one successful payment that had never become a database order. It found no Checkout Sessions, no active reusable Payment Links, and no additional provider history. The two unpaid attempts were canceled, and the successful $5 payment for **Morning at the beach** was reconciled into one paid order and one unique inventory sale. The painting is now sold and excluded from the public gallery. No new charge or refund was made. Because $5 may represent an earlier owner test, the operational handoff calls out that transaction for owner review; a recorded payment is not automatically ignored or relisted. The order timestamp is the recording date, not a claim about when the historical Stripe payment occurred.
+
+Both preexisting webhook registrations used `https://robertmorrow.art/api/webhook`, which the live host returned as HTTP307 to the `www` URL. The release includes an operator-only gated installation helper for a dedicated webhook at the direct URL, which stores its newly issued secret directly in encrypted Supabase Vault, followed by signed handler verification and retirement of the two verified old registrations. A private Recent orders section makes recorded sales and delivery details reviewable in Studio.

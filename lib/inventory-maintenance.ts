@@ -67,7 +67,7 @@ export async function auditPayments() {
     moreProviderHistory: intents.has_more || sessions.has_more || links.has_more || endpoints.has_more,
     scanned: { paymentIntents: intents.data.length, checkoutSessions: sessions.data.length, activePaymentLinks: links.data.length, webhookEndpoints: endpoints.data.length },
     webhooks: endpoints.data.filter((e) => { try { return ["www.robertmorrow.art", "robertmorrow.art"].includes(new URL(e.url).hostname); } catch { return false; } }).map((e) => ({ id: e.id, url: e.url, status: e.status, events: e.enabled_events })),
-    configuration: { stripe: !!process.env.STRIPE_SECRET_KEY, webhook: !!process.env.STRIPE_WEBHOOK_SECRET, database: !!process.env.SUPABASE_SERVICE_ROLE_KEY, email: !!process.env.RESEND_API_KEY, cron: !!process.env.CRON_SECRET, livePayments: process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ?? false },
+    configuration: { stripe: !!process.env.STRIPE_SECRET_KEY, webhook: !!process.env.STRIPE_WEBHOOK_SECRET, database: !!process.env.SUPABASE_SERVICE_ROLE_KEY, email: !!process.env.RESEND_API_KEY, cron: !!process.env.CRON_SECRET, livePayments: process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ?? false, checkoutEnabled: process.env.INVENTORY_CHECKOUT_ENABLED === "true", canonicalSite: process.env.NEXT_PUBLIC_SITE_URL },
   };
 }
 
