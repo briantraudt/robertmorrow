@@ -1,28 +1,16 @@
 "use client";
 
-import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "./cart-provider";
 import PaintingImage from "./painting-image";
 import { IconClose } from "./icons";
+import { useModalDialog } from "./use-modal-dialog";
 
 export default function CartDrawer() {
   const router = useRouter();
   const { cart, cartOpen, closeCart, removeFromCart } = useCart();
 
-  useEffect(() => {
-    if (cartOpen) {
-      document.body.style.overflow = "hidden";
-      const h = (e: KeyboardEvent) => {
-        if (e.key === "Escape") closeCart();
-      };
-      window.addEventListener("keydown", h);
-      return () => {
-        window.removeEventListener("keydown", h);
-        document.body.style.overflow = "";
-      };
-    }
-  }, [cartOpen, closeCart]);
+  const dialogRef = useModalDialog<HTMLElement>(cartOpen, closeCart);
 
   const subtotal = cart.reduce((a, p) => a + p.price, 0);
   const total = subtotal;
@@ -39,7 +27,7 @@ export default function CartDrawer() {
         style={{
           position: "fixed",
           inset: 0,
-          zIndex: 40,
+          zIndex: 60,
           background: "rgba(28,25,21,0.4)",
           opacity: cartOpen ? 1 : 0,
           pointerEvents: cartOpen ? "auto" : "none",
@@ -48,18 +36,25 @@ export default function CartDrawer() {
       />
 
       <aside
+        ref={dialogRef}
+        role="dialog"
+        aria-modal={cartOpen ? true : undefined}
         aria-label="Cart"
         aria-hidden={!cartOpen}
+        tabIndex={-1}
         style={{
           position: "fixed",
           top: 0,
           right: 0,
           bottom: 0,
-          zIndex: 41,
+          zIndex: 61,
           width: "min(460px, 100%)",
           background: "var(--paper)",
           transform: cartOpen ? "translateX(0)" : "translateX(100%)",
-          transition: "transform .45s cubic-bezier(.2,.7,.2,1)",
+          visibility: cartOpen ? "visible" : "hidden",
+          transition: cartOpen
+            ? "transform .45s cubic-bezier(.2,.7,.2,1)"
+            : "transform .45s cubic-bezier(.2,.7,.2,1), visibility 0s .45s",
           display: "flex",
           flexDirection: "column",
           borderLeft: "1px solid var(--line-2)",

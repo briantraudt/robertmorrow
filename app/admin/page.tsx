@@ -6,12 +6,19 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/admin-auth";
 import { getPaintings } from "@/lib/paintings";
 import AdminChrome from "@/components/admin/admin-chrome";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic"; // always fresh on admin
 
 export default async function AdminHome() {
-  requireAdmin();
+  await requireAdmin();
   const paintings = await getPaintings();
+  const { data: offers, error: offersError } = await createServerSupabaseClient()
+    .from("offers")
+    .select("id, token, painting_id, name, amount, status, created_at")
+    .order("created_at", { ascending: false })
+    .limit(25);
+  if (offersError) console.error("[admin] Could not load recent offers", offersError);
 
   const available = paintings.filter((p) => p.status === "available").length;
   const sold = paintings.filter((p) => p.status === "sold").length;
@@ -51,11 +58,12 @@ export default async function AdminHome() {
         </Link>
       </div>
 
-      <div style={{ border: "1px solid var(--line)" }}>
+      <div style={{ border: "1px solid var(--line)", overflowX: "auto" }}>
         <div
           className="small-caps muted"
           style={{
             display: "grid",
+            minWidth: 720,
             gridTemplateColumns: "60px minmax(0,2fr) 1fr 100px 100px 100px",
             gap: 14,
             padding: "14px 18px",
@@ -79,6 +87,7 @@ export default async function AdminHome() {
               key={p.id}
               style={{
                 display: "grid",
+                minWidth: 720,
                 gridTemplateColumns: "60px minmax(0,2fr) 1fr 100px 100px 100px",
                 gap: 14,
                 padding: "14px 18px",
@@ -140,6 +149,32 @@ export default async function AdminHome() {
           );
         })}
       </div>
+      <section style={{ marginTop: 48 }} aria-labelledby="studio-offers-title">
+        <h2 id="studio-offers-title" className="serif" style={{ fontSize: 30, fontWeight: 400, marginBottom: 18 }}>
+          Recent offers
+        </h2>
+        {offersError ? (
+          <p role="alert" className="muted">Offers could not be loaded. Please refresh and try again.</p>
+        ) : !offers?.length ? (
+          <p className="muted" style={{ fontSize: 13 }}>No offers yet.</p>
+        ) : (
+          <div style={{ borderTop: "1px solid var(--line)" }}>
+            {offers.map((offer) => (
+              <Link key={offer.id} href={`/admin/offers/${offer.token}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 18, flexWrap: "wrap", padding: "18px 0", borderBottom: "1px solid var(--line)" }}>
+                <div>
+                  <div className="serif italic" style={{ fontSize: 18 }}>{paintings.find((painting) => painting.id === offer.painting_id)?.title ?? "Painting removed from website"}</div>
+                  <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>{offer.name}</div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+                  <span className="serif" style={{ fontSize: 20 }}>${offer.amount.toLocaleString("en-US")}</span>
+                  <span className="small-caps muted" style={{ fontSize: 10 }}>{offer.status}</span>
+                  <span aria-hidden="true">→</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
     </AdminChrome>
   );
 }

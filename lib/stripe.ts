@@ -15,6 +15,6 @@ export function getStripe(): Stripe {
       "STRIPE_SECRET_KEY is not set. Copy .env.local.example → .env.local and add your test key.",
     );
   }
-  _stripe = new Stripe(key, { apiVersion: "2025-02-24.acacia" });
+  _stripe = new Stripe(key, { apiVersion: "2025-02-24.acacia", timeout: 10000, maxNetworkRetries: 2 });
   return _stripe;
 }

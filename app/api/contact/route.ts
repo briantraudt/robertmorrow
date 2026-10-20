@@ -1,35 +1,22 @@
 // =======================================================================
 // POST /api/contact — receives messages from the contact form.
 //
-// Two send paths, tried in order:
-//   1. Resend (RESEND_API_KEY + CONTACT_EMAIL in env)  → sends real email
-//   2. Fallback: log to server console and return ok   → useful in preview
+// Success means the email provider accepted the message for delivery.
 // =======================================================================
 
 import { NextResponse } from "next/server";
-import { rateLimit, rateLimitResponse } from "@/lib/security";
+import { forbiddenOriginResponse, isSameOrigin, rateLimit, rateLimitResponse } from "@/lib/security";
+import { InputError, readFormJson, validateContact } from "@/lib/admin-validation";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
+    if (!isSameOrigin(req)) return forbiddenOriginResponse();
     const limit = rateLimit(req, "contact", 5, 10 * 60 * 1000);
     if (!limit.ok) return rateLimitResponse(limit.retryAfter);
 
-    const body = await req.json();
-    const { name, email, subject, message } = body as {
-      name?: string;
-      email?: string;
-      subject?: string;
-      message?: string;
-    };
-
-    if (!name || !email || !message) {
-      return NextResponse.json(
-        { error: "Name, email, and message are required." },
-        { status: 400 },
-      );
-    }
+    const { name, email, subject, message } = validateContact(await readFormJson(req));
 
     const to = process.env.CONTACT_EMAIL;
     const key = process.env.RESEND_API_KEY;
@@ -37,6 +24,7 @@ export async function POST(req: Request) {
     if (key && to) {
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
+        signal: AbortSignal.timeout(15000),
         headers: {
           "content-type": "application/json",
           authorization: `Bearer ${key}`,
@@ -58,16 +46,13 @@ export async function POST(req: Request) {
         );
       }
     } else {
-      console.log("[api/contact] (stubbed — no RESEND_API_KEY set)", {
-        name,
-        email,
-        subject,
-        message,
-      });
+      console.error("[api/contact] Email delivery is not configured.");
+      return NextResponse.json({ error: "Messages are temporarily unavailable. Please try again later." }, { status: 503 });
     }
 
     return NextResponse.json({ ok: true });
   } catch (err) {
+    if (err instanceof InputError) return NextResponse.json({ error: err.message }, { status: err.status });
     console.error("[api/contact]", err);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }

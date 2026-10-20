@@ -12,6 +12,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import sharp from "sharp";
+import { randomUUID } from "node:crypto";
 import { isAdmin } from "@/lib/admin-auth";
 import { forbiddenOriginResponse, isSameOrigin } from "@/lib/security";
 
@@ -22,11 +23,11 @@ const BUCKET = "paintings";
 // Cap the stored image's long edge. Keeps uploads reasonable and the
 // gallery fast without losing detail on a 24" monitor.
 const MAX_EDGE = 2200;
-const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 
 export async function POST(req: Request) {
   if (!isSameOrigin(req)) return forbiddenOriginResponse();
-  if (!isAdmin()) {
+  if (!(await isAdmin())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   try {
@@ -53,13 +54,14 @@ export async function POST(req: Request) {
     if (!file || !(file instanceof Blob)) {
       return NextResponse.json({ error: "No file uploaded." }, { status: 400 });
     }
-    if (file.size > MAX_UPLOAD_BYTES) {
+    if (!file.size || file.size > MAX_UPLOAD_BYTES) {
       return NextResponse.json(
-        { error: "Image is too large. Please use a file under 12 MB." },
+        { error: "Please use a non-empty image under 4 MB. Export large HEIC images as JPEG first." },
         { status: 413 },
       );
     }
-    const originalName = (form.get("filename") as string) || "painting";
+    const filename = form.get("filename");
+    const originalName = typeof filename === "string" ? filename.slice(0, 240) : "painting";
     const looksLikeImage =
       file.type.startsWith("image/") ||
       /\.(heic|heif|jpe?g|png|webp|gif|avif|tiff?|bmp)$/i.test(originalName);
@@ -73,10 +75,10 @@ export async function POST(req: Request) {
     let width: number | undefined;
     let height: number | undefined;
     try {
-      const meta = await sharp(inputBytes, { failOn: "none" })
+      const meta = await sharp(inputBytes, { failOn: "error", limitInputPixels: 80000000 })
         .rotate()
         .metadata();
-      const pipeline = sharp(inputBytes, { failOn: "none" })
+      const pipeline = sharp(inputBytes, { failOn: "error", limitInputPixels: 80000000 })
         .rotate() // respect EXIF orientation (iPhone photos)
         .resize({
           width: MAX_EDGE,
@@ -94,10 +96,8 @@ export async function POST(req: Request) {
         `[upload] rotated ${meta.width}x${meta.height} → resized ${out.info.width}x${out.info.height}`,
       );
     } catch (e) {
-      // Sharp couldn't decode (rare — mostly exotic HEIC variants on some
-      // platforms). Fall back to the raw bytes.
-      console.warn("[api/admin/upload] sharp failed, uploading raw:", e);
-      processed = inputBytes;
+      console.warn("[api/admin/upload] Image decoding failed.", e instanceof Error ? e.name : "Unknown error");
+      return NextResponse.json({ error: "This image could not be read. Please export it as a JPEG or PNG and try again." }, { status: 422 });
     }
 
     // ---- Build path and upload -------------------------------------------
@@ -106,11 +106,7 @@ export async function POST(req: Request) {
       .replace(/[^a-z0-9.-]/g, "-")
       .replace(/-+/g, "-")
       .replace(/\.[^.]+$/, "");
-    const ext = processed === inputBytes ? (originalName.match(/\.([a-z0-9]+)$/i)?.[1] || "jpg") : "jpg";
-    const stamp = Date.now();
-    const path = `${stamp}-${safe}.${ext}`;
-
-    const contentType = ext === "jpg" || ext === "jpeg" ? "image/jpeg" : file.type || "application/octet-stream";
+    const path = `${randomUUID()}-${safe || "painting"}.jpg`;
 
     const supabase = createClient(url, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
@@ -118,7 +114,7 @@ export async function POST(req: Request) {
     const { error: upErr } = await supabase.storage
       .from(BUCKET)
       .upload(path, processed, {
-        contentType,
+        contentType: "image/jpeg",
         upsert: false,
         cacheControl: "31536000",
       });
@@ -131,7 +127,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, url: publicUrl, path, width, height });
   } catch (err) {
     console.error("[api/admin/upload]", err);
-    const message = err instanceof Error ? err.message : "Server error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: "Could not upload the image. Please try again." }, { status: 500 });
   }
 }

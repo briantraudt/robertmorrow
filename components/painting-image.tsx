@@ -45,6 +45,14 @@ export default function PaintingImage({
       : useGalleryThumb && primary?.url?.startsWith("/paintings/")
       ? primary.url.replace("/paintings/", "/paintings/thumbs/")
       : primary?.url;
+  const currentTitle = painting.title.trim();
+  const storedAlt = primary?.alt?.trim();
+  const placeholderAlt = /^(?:test|untitled|new painting|img[_\s-]?\d)/i.test(storedAlt ?? "");
+  // Uploaded photos often retain their original placeholder name after the
+  // painting is renamed. Never announce that old title to visitors.
+  const imageAlt = storedAlt && !placeholderAlt && storedAlt.toLowerCase().includes(currentTitle.toLowerCase())
+    ? storedAlt
+    : `${currentTitle}${painting.year > 0 ? `, ${painting.year}` : ""} by Robert Morrow`;
 
   // Generated placeholder data — memoized so the same painting always looks the same.
   const placeholder = useMemo(() => {
@@ -114,7 +122,7 @@ export default function PaintingImage({
       {primary ? (
         <img
           src={imageUrl}
-          alt={primary.alt ?? (painting.year > 0 ? `${painting.title}, ${painting.year}` : painting.title)}
+          alt={imageAlt}
           loading={priority ? "eager" : "lazy"}
           style={{
             position: "absolute",

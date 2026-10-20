@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import type { MetadataRoute } from "next";
 import { getPaintings } from "@/lib/paintings";
 import { absoluteUrl } from "@/lib/seo";

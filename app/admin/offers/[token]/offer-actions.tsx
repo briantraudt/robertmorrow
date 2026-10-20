@@ -2,21 +2,29 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { safeStripeCheckoutUrl } from "@/lib/admin-validation";
 
 export default function OfferActions({
   token,
   initialAction,
   currentStatus,
+  initialPaymentUrl,
+  offerAmount,
+  counterAmount,
 }: {
   offerId: string;
   token: string;
   initialAction?: string;
   currentStatus: string;
+  initialPaymentUrl?: string | null;
+  offerAmount: number;
+  counterAmount?: number | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [counter, setCounter] = useState("");
+  const [paymentUrl, setPaymentUrl] = useState<string | null>(initialPaymentUrl ?? null);
   const [mode, setMode] = useState<string | null>(
     initialAction && ["accept", "counter", "decline"].includes(initialAction)
       ? initialAction
@@ -24,6 +32,7 @@ export default function OfferActions({
   );
 
   async function run(action: "accept" | "counter" | "decline") {
+    if (busy) return;
     setBusy(true);
     setResult(null);
     try {
@@ -38,6 +47,8 @@ export default function OfferActions({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Action failed");
       setResult(data.message || "Done.");
+      if (data.paymentUrl) setPaymentUrl(safeStripeCheckoutUrl(data.paymentUrl));
+      setMode(null);
       router.refresh();
     } catch (err: unknown) {
       setResult(err instanceof Error ? err.message : "Action failed");
@@ -47,20 +58,32 @@ export default function OfferActions({
   }
 
   const closed = ["accepted", "declined", "withdrawn"].includes(currentStatus);
+  const isCountered = currentStatus === "countered";
+  const originalAmount = `$${offerAmount.toLocaleString("en-US")}`;
 
-  if (closed && !result) {
+  if (closed) {
     return (
-      <p className="muted" style={{ fontSize: 14, lineHeight: 1.7 }}>
-        This offer is already <strong>{currentStatus}</strong>. No further action.
-      </p>
+      <div role="status">
+        {result && <p style={{ marginBottom: 12 }}>{result}</p>}
+        <p className="muted" style={{ fontSize: 14, lineHeight: 1.7 }}>
+          This offer is <strong>{currentStatus}</strong>.
+        </p>
+        {currentStatus === "accepted" && paymentUrl && <PaymentLink url={paymentUrl} />}
+      </div>
     );
   }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {isCountered && (
+        <p className="muted" style={{ fontSize: 14, lineHeight: 1.7 }}>
+          If the buyer agrees to {counterAmount ? `the $${counterAmount.toLocaleString("en-US")} counter` : "your counter"},
+          ask them to submit a new offer at that amount. Accepting below uses their original {originalAmount} offer.
+        </p>
+      )}
       {!mode && (
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <ActionBtn onClick={() => setMode("accept")} label="Accept" />
+          <ActionBtn onClick={() => setMode("accept")} label={isCountered ? `Accept original ${originalAmount} offer` : "Accept"} />
           <ActionBtn onClick={() => setMode("counter")} label="Counter" variant="outline" />
           <ActionBtn onClick={() => setMode("decline")} label="Decline" variant="outline" />
         </div>
@@ -68,11 +91,11 @@ export default function OfferActions({
 
       {mode === "accept" && (
         <Confirm
-          body="Accepting will mark the painting reserved, email the buyer a secure payment link, and flip the painting to sold once they pay."
+          body={`${isCountered ? `Accepting charges the original ${originalAmount} offer when the buyer pays.` : `Accept the buyer's ${originalAmount} offer.`} The painting will be reserved for 24 hours, and the buyer will receive a secure payment link. Successful payment marks the painting sold.`}
           onConfirm={() => run("accept")}
           onCancel={() => setMode(null)}
           busy={busy}
-          confirmLabel="Yes, accept offer"
+          confirmLabel={isCountered ? `Accept original ${originalAmount} offer` : "Yes, accept offer"}
         />
       )}
 
@@ -90,6 +113,7 @@ export default function OfferActions({
             Your counter-offer (USD)
           </div>
           <input
+            aria-label="Counter-offer in US dollars"
             value={counter}
             onChange={(e) => setCounter(e.target.value.replace(/[^0-9]/g, ""))}
             inputMode="numeric"
@@ -111,6 +135,7 @@ export default function OfferActions({
               onClick={() => setMode(null)}
               label="Cancel"
               variant="ghost"
+              disabled={busy}
             />
           </div>
         </div>
@@ -140,6 +165,17 @@ export default function OfferActions({
           {result}
         </div>
       )}
+      {paymentUrl && <PaymentLink url={paymentUrl} />}
+    </div>
+  );
+}
+
+function PaymentLink({ url }: { url: string }) {
+  return (
+    <div style={{ marginTop: 20, padding: 20, border: "1px solid var(--line)" }}>
+      <label htmlFor="offer-checkout-link" className="small-caps muted" style={{ display: "block", fontSize: 10, marginBottom: 12 }}>Buyer checkout link</label>
+      <input id="offer-checkout-link" readOnly value={url} onFocus={(event) => event.currentTarget.select()} style={{ width: "100%", padding: 10, border: "1px solid var(--line)", background: "var(--paper)", fontSize: 12 }} />
+      <a href={url} target="_blank" rel="noopener noreferrer" className="small-caps" style={{ display: "inline-block", marginTop: 14, fontSize: 10.5 }}>Open secure checkout →</a>
     </div>
   );
 }

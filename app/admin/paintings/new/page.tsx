@@ -6,7 +6,7 @@ import PaintingForm from "@/components/admin/painting-form";
 export const dynamic = "force-dynamic";
 
 export default async function NewPaintingPage() {
-  requireAdmin();
+  await requireAdmin("/admin/paintings/new");
   return (
     <AdminChrome>
       <div style={{ marginBottom: 28 }}>

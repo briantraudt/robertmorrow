@@ -1,8 +1,7 @@
 // =======================================================================
 // /admin/offers/[token] — the page Robert lands on from the email's
 // Accept / Counter / Decline buttons. The token is an unguessable UUID
-// stored alongside the offer, so a cryptographically-secure URL doubles
-// as the auth. For stronger access control wire this up with Supabase Auth.
+// stored alongside the offer. Studio authentication is required as well.
 //
 // Accept: marks offer accepted, generates a Stripe payment link and emails
 //         it to the buyer.
@@ -15,6 +14,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getPainting } from "@/lib/paintings";
 import { requireAdmin } from "@/lib/admin-auth";
 import OfferActions from "./offer-actions";
+import { safeStripeCheckoutUrl } from "@/lib/admin-validation";
 
 export const dynamic = "force-dynamic";
 
@@ -30,29 +30,20 @@ type OfferRow = {
   counter: number | null;
   token: string;
   created_at: string;
+  internal_note: string | null;
 };
 
-export default async function AdminOfferPage({
-  params,
-  searchParams,
-}: {
-  params: { token: string };
-  searchParams: { action?: string };
+export default async function AdminOfferPage(context: {
+  params: Promise<{ token: string }>;
+  searchParams: Promise<{ action?: string }>;
 }) {
-  requireAdmin();
-
-  let offer: OfferRow | null = null;
-  try {
-    const supabase = createServerSupabaseClient();
-    const { data } = await supabase
-      .from("offers")
-      .select("*")
-      .eq("token", params.token)
-      .maybeSingle();
-    offer = (data as OfferRow | null) ?? null;
-  } catch {
-    /* fall through */
-  }
+  const [params, searchParams] = await Promise.all([context.params, context.searchParams]);
+  await requireAdmin(`/admin/offers/${encodeURIComponent(params.token)}${searchParams.action ? `?action=${encodeURIComponent(searchParams.action)}` : ""}`);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.token)) notFound();
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase.from("offers").select("*").eq("token", params.token).maybeSingle();
+  if (error) throw error;
+  const offer = (data as OfferRow | null) ?? null;
 
   if (!offer) notFound();
   const painting = await getPainting(offer.painting_id);
@@ -100,7 +91,7 @@ export default async function AdminOfferPage({
           </div>
           <div>
             <div className="small-caps muted" style={{ fontSize: 10, marginBottom: 6 }}>
-              Offer
+              {offer.counter ? "Original offer" : "Offer"}
             </div>
             <div className="serif" style={{ fontSize: 28 }}>${offer.amount}</div>
             {offer.counter && (
@@ -130,6 +121,9 @@ export default async function AdminOfferPage({
         token={offer.token}
         initialAction={searchParams.action}
         currentStatus={offer.status}
+        initialPaymentUrl={offer.status === "accepted" ? safeStripeCheckoutUrl(offer.internal_note) : null}
+        offerAmount={offer.amount}
+        counterAmount={offer.counter}
       />
     </section>
   );

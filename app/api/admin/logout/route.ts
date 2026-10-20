@@ -11,6 +11,6 @@ export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   if (!isSameOrigin(req)) return forbiddenOriginResponse();
-  cookies().delete(ADMIN_COOKIE);
+  (await cookies()).delete(ADMIN_COOKIE);
   return NextResponse.json({ ok: true });
 }

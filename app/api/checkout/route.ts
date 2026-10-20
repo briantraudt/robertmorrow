@@ -1,110 +1,40 @@
-// =======================================================================
-// POST /api/checkout
-// Creates a Stripe PaymentIntent for the items in the buyer's cart.
-// Body: { items: [{ id, slug }], email, name, address }
-// Response: { clientSecret }
-// =======================================================================
-
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
-import { getStripe } from "@/lib/stripe";
-import { getPainting } from "@/lib/paintings";
-import { rateLimit, rateLimitResponse } from "@/lib/security";
+import { getPaintings } from "@/lib/paintings";
+import { isSameOrigin, forbiddenOriginResponse, rateLimit, rateLimitResponse } from "@/lib/security";
+import { CheckoutError, validateCheckoutBody } from "@/lib/checkout-validation";
+import { reserveInventory, ensureCartPayment, cancelReservation, reconcileExpiredInventory } from "@/lib/inventory";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 export async function POST(req: Request) {
   try {
+    if (!isSameOrigin(req)) return forbiddenOriginResponse();
     const limit = rateLimit(req, "checkout", 20, 10 * 60 * 1000);
     if (!limit.ok) return rateLimitResponse(limit.retryAfter);
-
-    const body = await req.json();
-    const itemRefs: { id?: string; slug?: string }[] = body.items ?? [];
-    const email: string | undefined = body.email;
-    const name: string | undefined = body.name;
-    const address = body.address as
-      | {
-          line1?: string;
-          line2?: string;
-          city?: string;
-          state?: string;
-          postal_code?: string;
-          country?: string;
-        }
-      | undefined;
-
-    if (!itemRefs.length) {
-      return NextResponse.json({ error: "Cart is empty." }, { status: 400 });
+    const input = validateCheckoutBody(await req.json());
+    if (process.env.INVENTORY_CHECKOUT_ENABLED !== "true") return NextResponse.json({ error: "Online checkout is briefly unavailable while inventory is verified. Please try again soon." }, { status: 503 });
+    await reconcileExpiredInventory(input.ids);
+    const reservation = await reserveInventory(input.reservationId ?? randomUUID(), input.ids, input.buyer);
+    if (reservation.status === "paid" || reservation.status === "released") throw new CheckoutError("This checkout has finished. Please review your cart.", 409);
+    if (Date.parse(reservation.expires_at) <= Date.now()) {
+      await cancelReservation(reservation);
+      throw new CheckoutError("Your checkout hold has expired. Please start again.", 409);
     }
-    if (itemRefs.length > 10) {
-      return NextResponse.json({ error: "Cart has too many items." }, { status: 400 });
-    }
-
-    // Validate and price every item server-side (never trust client prices).
-    const resolved = [];
-    for (const ref of itemRefs) {
-      const key = ref.id || ref.slug;
-      if (!key) continue;
-      const p = await getPainting(key);
-      if (!p) {
-        return NextResponse.json(
-          { error: `Painting ${key} not found.` },
-          { status: 400 },
-        );
-      }
-      if (p.status !== "available") {
-        return NextResponse.json(
-          { error: `"${p.title}" is no longer available.` },
-          { status: 400 },
-        );
-      }
-      if (p.price <= 0) {
-        return NextResponse.json(
-          { error: `"${p.title}" is not priced for online checkout yet.` },
-          { status: 400 },
-        );
-      }
-      resolved.push(p);
-    }
-
-    const stripe = getStripe();
-    const subtotal = resolved.reduce((sum, p) => sum + p.price, 0);
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: subtotal * 100,
-      currency: "usd",
-      receipt_email: email,
-      payment_method_types: ["card"],
-      description:
-        resolved.length === 1
-          ? `${resolved[0].title} by Robert Morrow`
-          : `${resolved.length} paintings by Robert Morrow`,
-      metadata: {
-        painting_ids: resolved.map((p) => p.id).join(","),
-        painting_slugs: resolved.map((p) => p.slug).join(","),
-        buyer_name: name ?? "",
-      },
-      shipping:
-        name && address
-          ? {
-              name,
-              address: {
-                line1: address.line1 ?? "",
-                line2: address.line2 || undefined,
-                city: address.city ?? "",
-                state: address.state ?? "",
-                postal_code: address.postal_code ?? "",
-                country: address.country ?? "US",
-              },
-            }
-          : undefined,
+    const intent = await ensureCartPayment(reservation);
+    if (!["requires_payment_method", "requires_confirmation", "requires_action"].includes(intent.status)) throw new CheckoutError("This payment is already being processed or has finished. Please check its status.", 409);
+    const catalog = await getPaintings();
+    const items = reservation.items.map((item) => {
+      const painting = catalog.find((p) => p.id === item.id);
+      if (!painting) throw new Error("Reserved painting could not be loaded.");
+      return { ...painting, price: item.unit_amount / 100 };
     });
-
-    return NextResponse.json({
-      clientSecret: paymentIntent.client_secret,
-      total: subtotal,
-    });
-  } catch (err: unknown) {
-    console.error("[api/checkout]", err);
-    const message = err instanceof Error ? err.message : "Checkout failed.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ clientSecret: intent.client_secret, reservationId: reservation.id, total: reservation.amount_total / 100, expiresAt: reservation.expires_at, items }, { headers: { "Cache-Control": "no-store" } });
+  } catch (err) {
+    if (err instanceof SyntaxError) return NextResponse.json({ error: "Invalid checkout request." }, { status: 400 });
+    if (err instanceof CheckoutError) return NextResponse.json({ error: err.message }, { status: err.status });
+    console.error("[api/checkout]", err instanceof Error ? err.message : "Checkout error");
+    return NextResponse.json({ error: "We couldn’t prepare payment. Please try again; your checkout reference has been kept." }, { status: 503 });
   }
 }

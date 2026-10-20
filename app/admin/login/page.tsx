@@ -17,7 +17,7 @@ export default function AdminLoginPage() {
       const res = await fetch("/api/admin/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ password, returnTo: new URLSearchParams(window.location.search).get("next") }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -25,7 +25,7 @@ export default function AdminLoginPage() {
         setLoading(false);
         return;
       }
-      router.push("/admin");
+      router.push(data.redirect || "/admin");
       router.refresh();
     } catch {
       setError("Network error.");
@@ -64,13 +64,17 @@ export default function AdminLoginPage() {
         </p>
 
         <label
+          htmlFor="admin-password"
           className="small-caps muted"
           style={{ fontSize: 10, letterSpacing: "0.22em", display: "block", marginBottom: 8 }}
         >
           Password
         </label>
         <input
+          id="admin-password"
           type="password"
+          autoComplete="current-password"
+          required
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           autoFocus
@@ -85,7 +89,7 @@ export default function AdminLoginPage() {
         />
 
         {error && (
-          <div style={{ color: "#a42f2f", fontSize: 13, marginBottom: 12 }}>{error}</div>
+          <div role="alert" style={{ color: "#a42f2f", fontSize: 13, marginBottom: 12 }}>{error}</div>
         )}
 
         <button

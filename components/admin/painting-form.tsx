@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { cloneElement, isValidElement, useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Painting } from "@/lib/types";
 
@@ -25,7 +25,7 @@ type FormState = {
 };
 
 const CLIENT_UPLOAD_MAX_BYTES = 3.75 * 1024 * 1024;
-const CLIENT_DIRECT_UPLOAD_MAX_BYTES = 12 * 1024 * 1024;
+const CLIENT_DIRECT_UPLOAD_MAX_BYTES = CLIENT_UPLOAD_MAX_BYTES;
 const CLIENT_IMAGE_MAX_EDGE = 2200;
 const CLIENT_JPEG_QUALITIES = [0.86, 0.76, 0.66];
 
@@ -81,7 +81,7 @@ function isHeicFile(file: File) {
 async function prepareUploadFile(file: File): Promise<File> {
   if (isHeicFile(file)) {
     if (file.size <= CLIENT_DIRECT_UPLOAD_MAX_BYTES) return file;
-    throw new Error("That HEIC image is too large to upload. Choose a file under 12 MB or export it as a JPEG first.");
+    throw new Error("That HEIC image is too large to upload. Choose a file under 4 MB or export it as a JPEG first.");
   }
 
   if (file.size <= CLIENT_UPLOAD_MAX_BYTES && file.type === "image/jpeg") {
@@ -139,6 +139,10 @@ export default function PaintingForm({ mode, painting }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [selectedFileLabel, setSelectedFileLabel] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const previewObjectUrl = useRef<string | null>(null);
+  useEffect(() => () => {
+    if (previewObjectUrl.current) URL.revokeObjectURL(previewObjectUrl.current);
+  }, []);
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -147,8 +151,10 @@ export default function PaintingForm({ mode, painting }: Props) {
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
+    if (previewObjectUrl.current) URL.revokeObjectURL(previewObjectUrl.current);
+    previewObjectUrl.current = isHeicFile(f) ? null : URL.createObjectURL(f);
     setFile(f);
-    setPreview(isHeicFile(f) ? null : URL.createObjectURL(f));
+    setPreview(previewObjectUrl.current);
     setSelectedFileLabel(
       isHeicFile(f)
         ? `${f.name} selected; it will be converted to JPEG after upload.`
@@ -172,6 +178,7 @@ export default function PaintingForm({ mode, painting }: Props) {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (saving || deleting) return;
     setError(null);
     setSaving(true);
     try {
@@ -219,10 +226,10 @@ export default function PaintingForm({ mode, painting }: Props) {
   }
 
   async function onDelete() {
-    if (!painting) return;
+    if (!painting || saving || deleting) return;
     if (
       !confirm(
-        `Delete "${painting.title}"? This cannot be undone and will remove any related offer records.`,
+        `Remove "${painting.title}" from the website? Existing offer and image records will be preserved.`,
       )
     ) {
       return;
@@ -246,6 +253,7 @@ export default function PaintingForm({ mode, painting }: Props) {
   return (
     <form onSubmit={onSubmit} style={{ display: "grid", gap: 32 }}>
       <div
+        className="admin-painting-grid"
         style={{
           display: "grid",
           gridTemplateColumns: "minmax(280px, 1fr) 2fr",
@@ -310,7 +318,7 @@ export default function PaintingForm({ mode, painting }: Props) {
             </button>
           </div>
           <p className="muted" style={{ fontSize: 11, marginTop: 10, lineHeight: 1.5 }}>
-            JPEG, PNG, WebP, or HEIC — large photos are compressed before upload; HEIC photos are converted on the server.
+            JPEG, PNG, WebP, or HEIC — large photos are compressed before upload. HEIC files must be under 4 MB; export larger files as JPEG.
           </p>
           {selectedFileLabel ? (
             <p className="muted" style={{ fontSize: 11, marginTop: 8, lineHeight: 1.5 }}>
@@ -326,6 +334,7 @@ export default function PaintingForm({ mode, painting }: Props) {
               value={form.title}
               onChange={(e) => update("title", e.target.value)}
               required
+              maxLength={240}
               style={inputStyle}
             />
           </Field>
@@ -333,6 +342,8 @@ export default function PaintingForm({ mode, painting }: Props) {
           <Field label="Year (optional)">
             <input
               type="number"
+              min={0}
+              max={9999}
               value={form.year}
               onChange={(e) => update("year", e.target.value)}
               style={inputStyle}
@@ -344,6 +355,7 @@ export default function PaintingForm({ mode, painting }: Props) {
               value={form.medium}
               onChange={(e) => update("medium", e.target.value)}
               required
+              maxLength={240}
               placeholder="Acrylic on canvas"
               style={inputStyle}
             />
@@ -353,6 +365,8 @@ export default function PaintingForm({ mode, painting }: Props) {
             <Field label="Width (in)">
               <input
                 type="number"
+                min={1}
+                step={1}
                 value={form.w}
                 onChange={(e) => update("w", e.target.value)}
                 required
@@ -362,6 +376,8 @@ export default function PaintingForm({ mode, painting }: Props) {
             <Field label="Height (in)">
               <input
                 type="number"
+                min={1}
+                step={1}
                 value={form.h}
                 onChange={(e) => update("h", e.target.value)}
                 required
@@ -371,6 +387,8 @@ export default function PaintingForm({ mode, painting }: Props) {
             <Field label="Price (USD)">
               <input
                 type="number"
+                min={0}
+                step={1}
                 value={form.price}
                 onChange={(e) => update("price", e.target.value)}
                 required
@@ -383,6 +401,7 @@ export default function PaintingForm({ mode, painting }: Props) {
             <Field label="Status">
               <select
                 value={form.status}
+                disabled={mode === "edit" && painting?.status === "sold"}
                 onChange={(e) =>
                   update("status", e.target.value as "available" | "sold" | "reserved")
                 }
@@ -413,7 +432,7 @@ export default function PaintingForm({ mode, painting }: Props) {
             />
           </Field>
 
-          <Field label="Note (internal)">
+          <Field label="Painting note">
             <textarea
               value={form.note}
               onChange={(e) => update("note", e.target.value)}
@@ -426,6 +445,7 @@ export default function PaintingForm({ mode, painting }: Props) {
 
       {error && (
         <div
+          role="alert"
           style={{
             color: "#a42f2f",
             fontSize: 13,
@@ -453,13 +473,13 @@ export default function PaintingForm({ mode, painting }: Props) {
             <button
               type="button"
               onClick={onDelete}
-              disabled={deleting}
+              disabled={deleting || saving || painting?.status !== "available"}
               className="small-caps"
               style={{
                 fontSize: 10.5,
                 letterSpacing: "0.22em",
                 color: "#a42f2f",
-                opacity: deleting ? 0.5 : 1,
+                opacity: deleting || saving || painting?.status !== "available" ? 0.5 : 1,
               }}
             >
               {deleting ? "Deleting…" : "Delete painting"}
@@ -469,6 +489,7 @@ export default function PaintingForm({ mode, painting }: Props) {
         <div style={{ display: "flex", gap: 14 }}>
           <button
             type="button"
+            disabled={saving || deleting}
             onClick={() => router.push("/admin")}
             className="small-caps"
             style={{
@@ -483,7 +504,7 @@ export default function PaintingForm({ mode, painting }: Props) {
           </button>
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || deleting}
             className="small-caps"
             style={{
               padding: "12px 22px",
@@ -499,14 +520,24 @@ export default function PaintingForm({ mode, painting }: Props) {
           </button>
         </div>
       </div>
+      <style jsx>{`
+        @media (max-width: 720px) {
+          .admin-painting-grid {
+            grid-template-columns: 1fr !important;
+            gap: 24px !important;
+          }
+        }
+      `}</style>
     </form>
   );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  const id = useId();
   return (
     <div>
       <label
+        htmlFor={id}
         className="small-caps muted"
         style={{
           fontSize: 10,
@@ -517,7 +548,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       >
         {label}
       </label>
-      {children}
+      {isValidElement(children) ? cloneElement(children as React.ReactElement<{ id?: string }>, { id }) : children}
     </div>
   );
 }

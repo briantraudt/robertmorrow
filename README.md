@@ -1,206 +1,98 @@
 # Robert Morrow Art
 
-A quiet, editorial single-artist commerce site for Robert Morrow — oil paintings,
-sold directly. Built with Next.js 14, Supabase, Stripe, and Vercel.
+An original-painting storefront, private Studio, and payment workflow for [robertmorrow.art](https://www.robertmorrow.art/). Built with Next.js 15, React 19, Supabase, Stripe, and Vercel. Resend delivers contact and offer emails.
 
-## Stack
+## Inventory and payment behavior
 
-- **Next.js 14** (App Router, Server Components, TypeScript)
-- **Supabase** — Postgres for paintings/offers/orders + storage for painting images
-- **Stripe** — hosted Checkout Sessions for cart purchases, Payment Links for accepted offers
-- **Vercel** — hosting + automatic deploys from `main`
-- **Resend** _(optional)_ — transactional email for offers, contact form, and accepted-offer payment links
+Each painting is a single inventory item. Adding it to a cart does not reserve it. Preparing payment atomically reserves the complete cart in Postgres before Stripe returns a usable payment form. A cart hold lasts 30 minutes; an accepted offer uses a single-use Stripe Checkout Session and a 24-hour hold.
 
-The site works out of the box without any env vars — it falls back to 40 seeded
-paintings and logs emails to the console. Everything progressively unlocks as you
-wire up each service.
+`supabase/inventory.sql` installs private reservation, hold, and sale tables. A unique hold and a unique sale per painting, row locks, immutable price snapshots, and transactional database functions prevent two customers from buying the same original. Overlapping carts either reserve all their paintings or fail without a partial hold.
 
----
+Successful payment is verified server-side against Stripe, then one transaction records the order, marks its paintings sold, records their unique sale ownership, and completes the reservation. Duplicate callbacks are safe. Sold work disappears from the home gallery and other customers' carts. Its direct page and Studio record remain available as historical records with purchase controls disabled.
 
-## Quick start (local)
+Expiry is a reconciliation deadline, not permission to release stock. The server first cancels the PaymentIntent or expires the Checkout Session at Stripe. Processing payments and uncertain provider responses keep their paintings reserved. A scheduled recovery job retries incomplete creation and checks expired reservations every 10 minutes. Webhooks and the verified success-page status check also complete sales.
+
+Checkout retries reuse a persisted reservation UUID and Stripe idempotency key. Buyer details and prices are frozen while a payment is active. Editing them first requires confirmed cancellation. The cart clears only the paintings that the server confirms as paid.
+
+## Local development
 
 ```bash
-npm install
-cp .env.local.example .env.local   # fill in at least NEXT_PUBLIC_SITE_URL
+npm ci
+cp .env.local.example .env.local
 npm run dev
 ```
 
-Open http://localhost:3000. You'll see the gallery with seed data. Add to cart,
-open the detail overlay, submit an offer — all of it works in "demo" mode without
-Supabase or Stripe. Offers and orders just log to the terminal.
+Use an isolated Supabase project and Stripe test-mode credentials for development. Apply `supabase/schema.sql`, then `supabase/inventory.sql`. The live catalog requires a working database; it never falls back to seeded saleable inventory after a database error. Seed image URLs remain an image-only fallback for existing database records. The seed scripts are manual setup utilities and must not be run against an established production catalog.
 
----
+### Environment
 
-## Full setup (production)
+| Variable | Purpose |
+| --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public catalog client key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-only database access |
+| `STRIPE_SECRET_KEY` | Server-only Stripe key |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Matching Stripe public key |
+| `STRIPE_WEBHOOK_SECRET` | Signing secret for this site's webhook endpoint |
+| `NEXT_PUBLIC_SITE_URL` | Canonical absolute origin, production `https://www.robertmorrow.art` |
+| `ADMIN_PASSWORD` | Studio password |
+| `ADMIN_SESSION_SECRET` | Separate random signing secret for expiring Studio sessions |
+| `RESEND_API_KEY` | Email delivery; contact submissions fail clearly if unavailable |
+| `CONTACT_EMAIL` | Artist's notification destination |
+| `CRON_SECRET` | Random bearer secret for scheduled recovery and operator diagnostics |
+| `INVENTORY_CHECKOUT_ENABLED` | Must equal `true` to create checkout or accept an offer; missing/false pauses payment preparation |
 
-You already have accounts for all four services. Follow these in order.
+Never place server-only keys in `NEXT_PUBLIC_*` variables or commit environment files. Preview deployments must keep `INVENTORY_CHECKOUT_ENABLED=false` when they share production credentials. A separate test project/account is required for interactive test purchases.
 
-### 1. GitHub
+## Stripe and recovery
 
-Initialize and push the project.
+The webhook URL is `https://www.robertmorrow.art/api/webhook`. Subscribe to:
+
+- `payment_intent.succeeded`
+- `payment_intent.canceled`
+- `checkout.session.completed`
+- `checkout.session.expired`
+- `checkout.session.async_payment_succeeded`
+
+The handler verifies the raw-body signature and provider payment status. Database fulfillment errors return HTTP 500 for Stripe retries. Neither a failed card attempt nor elapsed time alone releases a painting.
+
+`vercel.json` schedules `GET /api/cron/inventory` every 10 minutes. Vercel supplies `Authorization: Bearer <CRON_SECRET>`. The same authenticated endpoint supports `GET ?audit=1` for redacted provider/configuration counts and `POST {"action":"reconcile_legacy"}` for retiring this site's older unpaid attempts and reusable offer links. Reconciliation records verified historical successes; it never charges a card or refunds a payment. Follow any incomplete-history, processing, or error counts before reopening checkout.
+
+Cart checkout collects a US delivery address. Accepted-offer Checkout Sessions retain the existing US/Canada address support. The painting price is charged; the site describes free local delivery and shipping available on request. Any shipping quote is arranged separately. Stripe receipt delivery depends on the Stripe account's receipt settings; the success page only promises the payment state verified by the application.
+
+## Studio and forms
+
+Studio requires an expiring signed cookie, including offer-token pages. A token URL alone is insufficient. Password/signing-key changes invalidate sessions. Sign in again after upgrades that change cookie format.
+
+Painting creation, metadata/image updates, and removal use one transactional RPC with an expected-status check. Active holds and recorded sales prevent conflicting admin edits or reopening sold originals. Removal uses the existing soft-delete marker so orders retain their history. Image uploads are bounded, decoded with Sharp, normalized to JPEG, and restricted to the configured artwork bucket.
+
+Incoming offers are saved before notification. Notification failures remain visible in Studio; accepted offers retain their secure payment URL there. Countered records explicitly distinguish accepting the buyer's original offer from the proposed counter amount. A buyer agreeing to a counter submits a fresh offer at that amount. Contact submissions only report success after the email provider accepts the request.
+
+## Verification
 
 ```bash
-cd "Robert Morrow Art"
-git init
-git add .
-git commit -m "Initial commit"
-gh repo create robertmorrow-art --private --source=. --push
-# or create the repo on github.com and push manually
+npm run typecheck
+npm run build
+npm test
+npm audit --omit=dev
 ```
 
-### 2. Supabase
+The TypeScript suites use isolated dependencies; they make no real purchases or email sends. To see individual cases with the current Node/tsx runner, run each test file directly:
 
-1. Create a new project on [supabase.com](https://supabase.com/dashboard).
-2. Once it's provisioned, open the **SQL Editor** and paste the contents of
-   `supabase/schema.sql`. Run it. That creates the `paintings`,
-   `painting_images`, `offers`, and `orders` tables with RLS policies.
-3. In **Settings → API**, copy these three values into `.env.local`:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `SUPABASE_SERVICE_ROLE_KEY` _(server-only — never expose)_
-4. Seed the paintings table from `lib/seed-data.ts`:
-   ```bash
-   npm run seed
-   ```
-5. _(Optional — for real photos)_ In **Storage**, create a public bucket called
-   `paintings`. Upload JPEGs named `{slug}-1.jpg`, `{slug}-2.jpg`, etc. The
-   `PaintingImage` component reads the `images` column on the painting row; just
-   update each row's `images` array to the public URLs.
-
-### 3. Stripe
-
-1. In the [Stripe dashboard](https://dashboard.stripe.com/test/apikeys), grab:
-   - `STRIPE_SECRET_KEY` (starts with `sk_test_` or `sk_live_`)
-   - `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` (starts with `pk_test_` or `pk_live_`)
-2. Create a webhook endpoint at **Developers → Webhooks** pointing to
-   `https://robertmorrow.art/api/webhook` with event `checkout.session.completed`.
-   Copy the signing secret into `STRIPE_WEBHOOK_SECRET`.
-3. For local webhook testing:
-   ```bash
-   stripe listen --forward-to localhost:3000/api/webhook
-   ```
-   Use the `whsec_...` it prints as your local `STRIPE_WEBHOOK_SECRET`.
-
-### 4. Resend (email)
-
-Without this, every email falls back to `console.log`. The site still works — Robert
-just won't get notified of offers or order confirmations.
-
-1. Sign up at [resend.com](https://resend.com), verify `robertmorrow.art` as a sending domain.
-2. Generate an API key → `RESEND_API_KEY`.
-3. Set `CONTACT_EMAIL=robert@robertmorrow.art` (or wherever Robert reads mail).
-
-The sender address used across the codebase is `offers@robertmorrow.art` and
-`robert@robertmorrow.art`. Update those strings in `app/api/offers/route.ts`,
-`app/api/offers/[token]/route.ts`, and `app/api/contact/route.ts` if you want
-different from-addresses.
-
-### 5. Vercel
-
-1. Import the GitHub repo at [vercel.com/new](https://vercel.com/new).
-2. Framework detection should pick up Next.js automatically.
-3. Add every variable from your `.env.local` to **Settings → Environment Variables**
-   (Production + Preview). Set `NEXT_PUBLIC_SITE_URL` to `https://robertmorrow.art`.
-4. Deploy.
-5. Copy the production URL; update Stripe's webhook endpoint to point at it.
-
-### 6. Domain (robertmorrow.art)
-
-The domain is already registered. In your registrar's DNS settings, add these
-records pointing at Vercel:
-
-| Type  | Name | Value                |
-|-------|------|----------------------|
-| A     | @    | `76.76.21.21`        |
-| CNAME | www  | `cname.vercel-dns.com` |
-
-Then in Vercel: **Settings → Domains → Add** → enter `robertmorrow.art` and
-`www.robertmorrow.art`. Vercel will issue a certificate once DNS propagates
-(usually under an hour).
-
----
-
-## How the offer flow works
-
-1. Buyer clicks **Make an offer** on a painting detail page.
-2. `POST /api/offers` writes the offer to Supabase, generates an unguessable UUID
-   `token`, and emails Robert an HTML note with three big buttons: **Accept**,
-   **Counter**, **Decline** — each one links to `/admin/offers/[token]?action=...`.
-3. Robert clicks one. The `/admin/offers/[token]` page loads, he confirms the action,
-   and the client posts to `/api/offers/[token]`:
-   - **Accept** — creates a one-off Stripe Product + Price + Payment Link at the
-     offered amount, marks the painting `reserved`, emails the buyer the payment
-     link. When they pay, the existing checkout webhook flips the painting to `sold`.
-   - **Counter** — stores the counter amount, emails the buyer with it.
-   - **Decline** — marks the offer declined, emails a polite note.
-
-The token is the auth. It's a v4 UUID stored alongside the offer, so the URL
-itself is unguessable. If you want harder access control for the admin pages, wire
-`/admin/*` up to Supabase Auth with Robert's email as the only allowed user.
-
----
-
-## Project map
-
-```
-app/
-  page.tsx                  Home (hero + gallery grid)
-  paintings/[slug]/         Painting detail page (also opens as overlay)
-  checkout/                 3-step checkout (contact → shipping → payment)
-  checkout/success/         Post-payment thank you
-  admin/offers/[token]/     Robert's accept/counter/decline view
-  about/ contact/           Static content
-  api/
-    checkout/               Creates Stripe Checkout Session
-    webhook/                Stripe checkout.session.completed handler
-    offers/                 POST = new offer (emails Robert)
-    offers/[token]/         POST = accept/counter/decline an offer
-    contact/                POST = contact form email
-components/
-  gallery.tsx               Masonry + filter tabs + sort
-  detail.tsx                Slide-in painting detail panel
-  make-offer.tsx            Modal: amount + contact, submits to /api/offers
-  cart-provider.tsx         Cart context (localStorage-backed)
-  cart-drawer.tsx           460px right-side cart drawer
-  checkout-flow.tsx         3-step stepper + Stripe redirect
-  painting-image.tsx        Real image with painterly SVG fallback
-lib/
-  paintings.ts              getPaintings / getPainting with seed fallback
-  seed-data.ts              40 seeded paintings
-  supabase/server.ts        Service-role client (server only)
-  supabase/client.ts        Anon client (browser-safe)
-  stripe.ts                 getStripe() helper
-supabase/schema.sql         Tables + RLS policies
-scripts/seed.ts             Seeds the paintings table
+```bash
+node --import tsx tests/admin.test.ts
+node --import tsx tests/checkout-validation.test.ts
+node --import tsx tests/payment-orchestration.test.ts
+node --import tsx tests/checkout-ui.test.ts
+node --import tsx tests/inventory-maintenance.test.ts
 ```
 
----
+The real Postgres suites cover transaction and concurrency guarantees. Run them only against a disposable test database. `tests/inventory.sql` requires the base schema and inventory migration and rolls its fixtures back. `tests/inventory_concurrency.py` creates and drops its own temporary database using a privileged test connection; see its environment configuration at the top of the file.
 
-## Design tokens
+## Deployment and incident handling
 
-Defined as CSS variables in `app/globals.css`:
+The existing GitHub `main` branch deploys to the existing Vercel project. Apply reviewed additive SQL before deploying code that calls it. For the first inventory rollout, deploy with checkout disabled, reconcile older Stripe attempts and links, confirm complete history and no unresolved payments, then enable production checkout and redeploy the same reviewed source. Keep previews disabled.
 
-```
---paper: #F7F4EE        warm off-white background
---ink:   #1C1915        deep near-black
---line:  rgba(28,25,21,0.12)
-```
+If recovery reports errors, inspect the relevant reservation and Stripe payment together. Do not manually release a painting while a payment can still succeed. Do not delete an order, inventory sale, or reservation to resolve a display problem. Use the release gate to pause new payment preparation while repairing an incident. A rollback to pre-reservation checkout code would bypass the inventory guarantees; preserve the inventory backend when reverting unrelated UI changes.
 
-Fonts: **Cormorant Garamond** (display) + **Inter** (body), loaded via
-`next/font/google` in `app/layout.tsx`.
-
----
-
-## Maintenance notes
-
-- **Adding a painting**: insert a row in `paintings` (Supabase Studio is easiest),
-  then upload images to the `paintings` storage bucket and put the public URLs in
-  the row's `images` JSONB column.
-- **Marking sold manually**: update `paintings.status` to `sold` in Supabase. The
-  gallery and detail page will reflect it immediately (`force-dynamic` on server
-  components means no cache to bust).
-- **Changing shipping**: the flat $45 is in `app/api/checkout/route.ts` and
-  mentioned in `components/detail.tsx` ("Flat rate $45"). Update both.
-- **Seed data drift**: `lib/seed-data.ts` is only used as a local-dev fallback.
-  Once Supabase is populated, the seed module is effectively dead code — safe to
-  leave in place as a safety net.
+See [the audit record](docs/AUDIT.md) for the findings, fixes, and verification boundaries of the October 2026 update.

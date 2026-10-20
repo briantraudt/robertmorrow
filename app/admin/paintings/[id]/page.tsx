@@ -7,12 +7,9 @@ import PaintingForm from "@/components/admin/painting-form";
 
 export const dynamic = "force-dynamic";
 
-export default async function EditPaintingPage({
-  params,
-}: {
-  params: { id: string };
-}) {
-  requireAdmin();
+export default async function EditPaintingPage(context: { params: Promise<{ id: string }> }) {
+  const params = await context.params;
+  await requireAdmin(`/admin/paintings/${encodeURIComponent(params.id)}`);
   const painting = await getPainting(params.id);
   if (!painting) notFound();
 

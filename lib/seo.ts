@@ -1,7 +1,7 @@
 import type { Painting } from "@/lib/types";
 
 export const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL || "https://robertmorrow.art";
+  (process.env.NEXT_PUBLIC_SITE_URL || "https://www.robertmorrow.art").trim().replace(/\/$/, "");
 
 export const siteName = "Robert Morrow";
 export const artistName = "Robert Morrow";
@@ -45,7 +45,9 @@ export function paintingDescription(painting: Painting) {
   const priceText =
     painting.status === "sold"
       ? "This work has sold."
-      : painting.price > 0
+      : painting.status === "reserved"
+        ? "This work is currently reserved."
+        : painting.price > 0
         ? `Available for sale for $${painting.price}.`
         : "Available for sale; price on request.";
 
@@ -102,7 +104,9 @@ export function paintingJsonLd(painting: Painting) {
   const availability =
     painting.status === "sold"
       ? "https://schema.org/SoldOut"
-      : "https://schema.org/InStock";
+      : painting.status === "reserved"
+        ? "https://schema.org/OutOfStock"
+        : "https://schema.org/InStock";
 
   return {
     "@context": "https://schema.org",
@@ -130,7 +134,9 @@ export function paintingJsonLd(painting: Painting) {
       "@type": "Offer",
       availability,
       priceCurrency: "USD",
-      price: painting.price > 0 ? painting.price : undefined,
+      price: painting.status === "reserved"
+        ? "This work is currently reserved."
+        : painting.price > 0 ? painting.price : undefined,
       url: absoluteUrl(`/paintings/${painting.slug}`),
       seller: { "@id": absoluteUrl("/about#artist") },
     },

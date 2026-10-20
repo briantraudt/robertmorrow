@@ -11,16 +11,17 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getPainting } from "@/lib/paintings";
-import { rateLimit, rateLimitResponse } from "@/lib/security";
+import { forbiddenOriginResponse, isSameOrigin, rateLimit, rateLimitResponse } from "@/lib/security";
+import { InputError, readFormJson, validateOffer } from "@/lib/admin-validation";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
+    if (!isSameOrigin(req)) return forbiddenOriginResponse();
     const limit = rateLimit(req, "offers", 8, 10 * 60 * 1000);
     if (!limit.ok) return rateLimitResponse(limit.retryAfter);
 
-    const body = await req.json();
     const {
       painting_id,
       amount,
@@ -28,20 +29,7 @@ export async function POST(req: Request) {
       email,
       phone,
       message,
-    } = body as Record<string, string | number | undefined>;
-
-    if (
-      !painting_id ||
-      typeof amount !== "number" ||
-      amount < 1 ||
-      !name ||
-      !email
-    ) {
-      return NextResponse.json(
-        { error: "Missing required fields." },
-        { status: 400 },
-      );
-    }
+    } = validateOffer(await readFormJson(req));
 
     const painting = await getPainting(String(painting_id));
     if (!painting) {
@@ -57,11 +45,9 @@ export async function POST(req: Request) {
       );
     }
 
-    // 1) Persist the offer
-    let token: string | null = null;
-    try {
-      const supabase = createServerSupabaseClient();
-      const { data, error } = await supabase
+    // 1) Persist the offer. Never acknowledge an offer that was not saved.
+    const supabase = createServerSupabaseClient();
+    const { data, error } = await supabase
         .from("offers")
         .insert({
           painting_id: painting.id,
@@ -73,28 +59,26 @@ export async function POST(req: Request) {
         })
         .select("token")
         .single();
-      if (error) throw error;
-      token = data?.token ?? null;
-    } catch (err) {
-      // Don't block the user if DB write fails — still email Robert.
-      console.error("[api/offers] DB insert failed:", err);
-    }
+    if (error) throw error;
+    const token = data?.token;
+    if (!token) throw new Error("Offer insert did not return a token.");
 
     // 2) Email Robert (if configured)
     const to = process.env.CONTACT_EMAIL;
     const key = process.env.RESEND_API_KEY;
     const siteUrl =
       process.env.NEXT_PUBLIC_SITE_URL ||
-      req.headers.get("origin") ||
-      "https://robertmorrow.art";
+      "https://www.robertmorrow.art";
+
+    let notificationSent = false;
 
     if (key && to && token) {
       const actions = ["accept", "counter", "decline"] as const;
       const actionLinks = actions
         .map((a) => {
-          const url = `${siteUrl}/admin/offers/${token}?action=${a}`;
+          const url = new URL(`/admin/offers/${token}?action=${a}`, siteUrl).toString();
           const label = a[0].toUpperCase() + a.slice(1);
-          return `<a href="${url}" style="display:inline-block;padding:12px 20px;margin-right:8px;background:#1C1915;color:#F7F4EE;text-decoration:none;font-family:sans-serif;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;">${label}</a>`;
+          return `<a href="${escapeHtml(url)}" style="display:inline-block;padding:12px 20px;margin-right:8px;background:#1C1915;color:#F7F4EE;text-decoration:none;font-family:sans-serif;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;">${label}</a>`;
         })
         .join("");
 
@@ -122,8 +106,10 @@ export async function POST(req: Request) {
         </div>
       `;
 
-      const res = await fetch("https://api.resend.com/emails", {
+      try {
+        const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
+        signal: AbortSignal.timeout(15000),
         headers: {
           "content-type": "application/json",
           authorization: `Bearer ${key}`,
@@ -139,19 +125,17 @@ export async function POST(req: Request) {
       if (!res.ok) {
         console.error("[api/offers] Resend error:", await res.text());
       }
+      notificationSent = res.ok;
+      } catch (error) {
+        console.error("[api/offers] Email delivery failed.", error instanceof Error ? error.name : "Unknown error");
+      }
     } else {
-      console.log("[api/offers] (no RESEND_API_KEY — would email Robert)", {
-        painting: painting.title,
-        amount,
-        name,
-        email,
-        phone,
-        message,
-      });
+      console.error("[api/offers] Offer saved, but email delivery is not configured.");
     }
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, notificationSent });
   } catch (err) {
+    if (err instanceof InputError) return NextResponse.json({ error: err.message }, { status: err.status });
     console.error("[api/offers]", err);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }

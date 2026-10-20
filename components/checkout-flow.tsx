@@ -4,8 +4,9 @@
 // Visual three-step checkout with Stripe's Payment Element embedded on-site.
 // =======================================================================
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   CardElement,
   Elements,
@@ -16,70 +17,256 @@ import { loadStripe } from "@stripe/stripe-js";
 import PaintingImage from "./painting-image";
 import { IconArrowLeft, IconCheck } from "./icons";
 import { useCart } from "./cart-provider";
+import {
+  checkoutFingerprint,
+  checkoutRequest,
+  clearCheckoutDraft,
+  emptyCheckoutForm,
+  readCheckoutDraft,
+  saveCheckoutDraft,
+  type CheckoutDraft,
+  type CheckoutForm,
+  type CheckoutStatus,
+} from "./checkout-session";
+import type { Painting } from "@/lib/types";
 
 const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
   ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
   : null;
 
 export default function CheckoutFlow() {
-  const { cart, clearCart } = useCart();
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const router = useRouter();
+  const { cart, hydrated: cartHydrated } = useCart();
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [hydrated, setHydrated] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [paying, setPaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
-  const [form, setForm] = useState({
-    email: "",
-    name: "",
-    address1: "",
-    address2: "",
-    city: "",
-    state: "",
-    zip: "",
-  });
-  const set = (k: keyof typeof form, v: string) =>
-    setForm((f) => ({ ...f, [k]: v }));
+  const [form, setForm] = useState<CheckoutForm>(emptyCheckoutForm);
+  const [draft, setDraft] = useState<CheckoutDraft | null>(null);
+  const [expired, setExpired] = useState(false);
+  const draftRef = useRef<CheckoutDraft | null>(null);
+  const operationRef = useRef(false);
+  const resumedRef = useRef(false);
+  const mountedRef = useRef(true);
 
-  const subtotal = cart.reduce((a, p) => a + p.price, 0);
-  const delivery = 0;
-  const total = subtotal + delivery;
+  useEffect(() => {
+    mountedRef.current = true;
+    const saved = readCheckoutDraft();
+    if (saved) {
+      draftRef.current = saved;
+      setDraft(saved);
+      setForm(saved.form);
+      setStep(3);
+    }
+    setHydrated(true);
+    return () => { mountedRef.current = false; };
+  }, []);
 
-  const empty = cart.length === 0 && step !== 4;
+  useEffect(() => {
+    if (!hydrated || !cartHydrated || resumedRef.current || !draftRef.current) return;
+    resumedRef.current = true;
+    void preparePaymentStep(draftRef.current);
+    // Resume exactly the saved request; changing cart/form must never create
+    // a second PaymentIntent while an earlier request is uncertain.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, cartHydrated]);
 
-  async function preparePaymentStep() {
+  useEffect(() => {
+    if (!draft?.expiresAt) return;
+    const remaining = new Date(draft.expiresAt).getTime() - Date.now();
+    if (!Number.isFinite(remaining)) return;
+    if (remaining <= 0) { setExpired(true); return; }
+    setExpired(false);
+    const timer = setTimeout(() => setExpired(true), Math.min(remaining, 2_147_483_647));
+    return () => clearTimeout(timer);
+  }, [draft?.expiresAt]);
+
+  const set = (key: keyof CheckoutForm, value: string) => {
+    if (!draftRef.current && !operationRef.current && !submitting && !paying) {
+      setForm((current) => ({ ...current, [key]: value }));
+    }
+  };
+
+  const summaryItems = draft?.summary ?? cart;
+  const subtotal = summaryItems.reduce((sum, painting) => sum + painting.price, 0);
+  const total = draft?.total ?? subtotal;
+  const cartChanged = cartHydrated && Boolean(draft) &&
+    JSON.stringify(cart.map((painting) => painting.id).sort()) !==
+    JSON.stringify(draft!.items.map((item) => item.id).sort());
+  const busy = submitting || paying;
+  const empty = hydrated && cartHydrated && cart.length === 0 && !draft;
+
+  function remember(next: CheckoutDraft) {
+    saveCheckoutDraft(next);
+    draftRef.current = next;
+    setDraft(next);
+  }
+
+  function forget(reservationId: string) {
+    clearCheckoutDraft(reservationId);
+    draftRef.current = null;
+    setDraft(null);
+    setClientSecret(null);
+    setExpired(false);
+  }
+
+  function confirmationPage(reservationId: string) {
+    window.location.assign(`/checkout/success?reservation_id=${encodeURIComponent(reservationId)}`);
+  }
+
+  function validateContact() {
+    if (!form.name.trim()) return "Please enter your full name.";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return "Please enter a valid email address.";
+    return null;
+  }
+
+  async function leavePayment(nextStep: 1 | 2 | "home") {
+    if (operationRef.current || paying) return;
+    const current = draftRef.current;
+    setError(null);
+    if (current) {
+      operationRef.current = true;
+      setSubmitting(true);
+      try {
+        let result: CheckoutStatus;
+        try {
+          result = await checkoutRequest<CheckoutStatus>("/api/checkout/cancel", { reservationId: current.reservationId });
+        } catch {
+          // A lost cancellation response is not permission to create another
+          // payment. Reconcile the existing reservation before moving on.
+          result = await checkoutRequest<CheckoutStatus>("/api/checkout/status", { reservationId: current.reservationId });
+        }
+        if (!mountedRef.current) return;
+        if (result.status === "paid" || result.status === "processing") {
+          confirmationPage(current.reservationId);
+          return;
+        }
+        if (result.status !== "released") {
+          throw new Error("We couldn’t confirm that checkout was cancelled. Your checkout is saved; please try again.");
+        }
+        forget(current.reservationId);
+      } catch (cause) {
+        setError(cause instanceof Error && cause.name !== "AbortError"
+          ? cause.message
+          : "We couldn’t confirm that checkout was cancelled. Your checkout is saved; please try again.");
+        return;
+      } finally {
+        operationRef.current = false;
+        setSubmitting(false);
+      }
+    }
+    if (nextStep === "home") router.push("/");
+    else setStep(nextStep);
+  }
+
+  async function preparePaymentStep(saved?: CheckoutDraft) {
+    if (operationRef.current || paying) return;
+    operationRef.current = true;
     setError(null);
     setSubmitting(true);
+    let current = saved ?? draftRef.current;
     try {
       if (!stripePromise) {
-        throw new Error("Stripe is not configured yet.");
+        throw new Error("Secure payment is unavailable right now. Please try again shortly.");
       }
-      const res = await fetch("/api/checkout", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          items: cart.map((p) => ({ id: p.id, slug: p.slug })),
-          email: form.email,
-          name: form.name,
-          address: {
-            line1: form.address1,
-            line2: form.address2,
-            city: form.city,
-            state: form.state,
-            postal_code: form.zip,
-            country: "US",
-          },
-        }),
+      if (!current) {
+        const contactError = validateContact();
+        if (contactError) { setStep(1); throw new Error(contactError); }
+        if (!form.address1.trim() || !form.city.trim()) throw new Error("Please enter your street address and city.");
+        if (!/^[a-z]{2}$/i.test(form.state.trim())) throw new Error("Please use the two-letter state abbreviation, such as TX.");
+        if (!/^\d{5}(?:-\d{4})?$/.test(form.zip.trim())) throw new Error("Please enter a valid U.S. ZIP code.");
+        if (!cart.length || cart.length > 10) throw new Error("Please choose between 1 and 10 paintings for checkout.");
+        const normalizedForm = Object.fromEntries(Object.entries(form).map(([key, value]) => [key, value.trim()])) as CheckoutForm;
+        normalizedForm.state = normalizedForm.state.toUpperCase();
+        normalizedForm.email = normalizedForm.email.toLowerCase();
+        const items = cart.map((painting) => ({ id: painting.id, slug: painting.slug }));
+        current = {
+          version: 1,
+          reservationId: crypto.randomUUID(),
+          form: normalizedForm,
+          items,
+          fingerprint: checkoutFingerprint(items, normalizedForm),
+          summary: cart,
+        };
+        try { remember(current); }
+        catch { throw new Error("Your browser couldn’t save checkout progress. Please allow site storage or try another browser."); }
+        setForm(normalizedForm);
+      }
+      const data = await checkoutRequest<{
+        clientSecret?: string;
+        reservationId: string;
+        total: number;
+        expiresAt: string;
+        items: Painting[];
+        status?: CheckoutStatus["status"];
+      }>("/api/checkout", {
+        reservationId: current.reservationId,
+        items: current.items,
+        email: current.form.email,
+        name: current.form.name,
+        address: {
+          line1: current.form.address1,
+          line2: current.form.address2,
+          city: current.form.city,
+          state: current.form.state,
+          postal_code: current.form.zip,
+          country: "US",
+        },
       });
-      const data = await res.json();
-      if (!res.ok || !data.clientSecret) {
-        throw new Error(data.error || "Checkout failed. Please try again.");
+      if (!mountedRef.current) return;
+      if (data.status === "paid" || data.status === "processing") {
+        confirmationPage(current.reservationId);
+        return;
       }
-      setClientSecret(data.clientSecret as string);
+      if (data.status === "released") {
+        forget(current.reservationId);
+        setStep(2);
+        throw new Error("That reservation has ended. Continue to payment to check availability again.");
+      }
+      if (
+        data.reservationId !== current.reservationId ||
+        typeof data.clientSecret !== "string" ||
+        !Number.isFinite(data.total) || data.total <= 0 ||
+        !Array.isArray(data.items) || data.items.length === 0
+      ) throw new Error("We couldn’t verify the payment details. Your checkout is saved; please try again.");
+      const confirmedDraft = { ...current, total: data.total, expiresAt: data.expiresAt, summary: data.items };
+      remember(confirmedDraft);
+      setClientSecret(data.clientSecret);
       setStep(3);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Checkout failed.");
+    } catch (cause: unknown) {
+      if (!mountedRef.current) return;
+      if (current && draftRef.current?.reservationId === current.reservationId) {
+        try {
+          const result = await checkoutRequest<CheckoutStatus>("/api/checkout/status", { reservationId: current.reservationId });
+          if (!mountedRef.current) return;
+          if (result.status === "paid" || result.status === "processing") {
+            confirmationPage(current.reservationId);
+            return;
+          }
+          if (result.status === "released") {
+            forget(current.reservationId);
+            setStep(2);
+            setError("That reservation has ended. Continue to payment to check availability again.");
+            return;
+          }
+        } catch {
+          // A missing or unreachable response may overlap the initial request.
+          // Retain its reference instead of creating another checkout.
+        }
+      }
+      setError(cause instanceof Error && cause.name !== "AbortError"
+        ? cause.message
+        : "We couldn’t confirm checkout yet. Your checkout is saved so you can retry safely.");
     } finally {
+      operationRef.current = false;
       setSubmitting(false);
     }
+  }
+
+  if (!hydrated || !cartHydrated) {
+    return <p role="status" className="muted" style={{ textAlign: "center", padding: "120px 24px" }}>Loading your checkout…</p>;
   }
 
   if (empty) {
@@ -117,9 +304,11 @@ export default function CheckoutFlow() {
   }
 
   return (
-    <div style={{ maxWidth: 1280, margin: "0 auto", padding: "56px 48px 120px" }}>
-      <Link
-        href="/"
+    <div style={{ maxWidth: 1280, margin: "0 auto", padding: "56px clamp(20px, 5vw, 48px) 120px" }}>
+      <button
+        type="button"
+        onClick={() => void leavePayment("home")}
+        disabled={busy}
         className="small-caps"
         style={{
           display: "flex",
@@ -130,13 +319,13 @@ export default function CheckoutFlow() {
         }}
       >
         <IconArrowLeft size={14} sw={1.3} /> Back to paintings
-      </Link>
+      </button>
 
       <div
         className="checkout-grid"
         style={{
           display: "grid",
-          gridTemplateColumns: "1.4fr 1fr",
+          gridTemplateColumns: "minmax(0, 1.4fr) minmax(0, 1fr)",
           gap: 80,
           marginTop: 32,
         }}
@@ -169,13 +358,16 @@ export default function CheckoutFlow() {
                 style={{ flex: 1, display: "flex", alignItems: "center" }}
               >
                 <button
-                  onClick={() => step > s.n && setStep(s.n as 1 | 2 | 3)}
+                  type="button"
+                  onClick={() => step > s.n && void leavePayment(s.n as 1 | 2)}
+                  disabled={busy || step <= s.n}
+                  aria-current={step === s.n ? "step" : undefined}
                   className="small-caps"
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: 10,
-                    fontSize: 10.5,
+                    gap: "clamp(4px, 0.75vw, 10px)",
+                    fontSize: "clamp(9px, 1vw, 10.5px)",
                     letterSpacing: "0.2em",
                     color: step >= s.n ? "var(--ink)" : "var(--ink-4)",
                     cursor: step > s.n ? "pointer" : "default",
@@ -188,6 +380,7 @@ export default function CheckoutFlow() {
                       justifyContent: "center",
                       width: 22,
                       height: 22,
+                      flexShrink: 0,
                       borderRadius: 999,
                       border: `1px solid ${step >= s.n ? "var(--ink)" : "var(--line)"}`,
                       background: step > s.n ? "var(--ink)" : "transparent",
@@ -206,13 +399,28 @@ export default function CheckoutFlow() {
                       flex: 1,
                       height: 1,
                       background: "var(--line)",
-                      margin: "0 16px",
+                      margin: "0 clamp(4px, 1.2vw, 16px)",
                     }}
                   />
                 )}
               </div>
             ))}
           </div>
+
+          {error && (
+            <div role="alert" style={{ background: "var(--paper-2)", padding: "12px 16px", marginBottom: 20, fontSize: 13, lineHeight: 1.6, color: "var(--ink-2)", borderLeft: "2px solid var(--ink)" }}>
+              {error}
+            </div>
+          )}
+
+          {draft && (expired || cartChanged) && (
+            <div role="status" style={{ background: "var(--paper-2)", padding: "16px", marginBottom: 20, fontSize: 13, lineHeight: 1.6 }}>
+              <p>{expired ? "Your reservation time has ended. Check availability again before paying." : "Your cart has changed. Update checkout before paying."}</p>
+              <button type="button" onClick={() => void leavePayment(1)} disabled={busy} style={{ marginTop: 8, textDecoration: "underline", textUnderlineOffset: 3 }}>
+                {submitting ? "Updating checkout…" : "Update checkout"}
+              </button>
+            </div>
+          )}
 
           {step === 1 && (
             <StepCard title="Contact information">
@@ -222,16 +430,26 @@ export default function CheckoutFlow() {
                 onChange={(v) => set("email", v)}
                 placeholder="you@example.com"
                 type="email"
+                autoComplete="email"
+                maxLength={254}
+                disabled={Boolean(draft) || busy}
               />
               <Field
                 label="Full name"
                 value={form.name}
                 onChange={(v) => set("name", v)}
                 placeholder="First and last name"
+                autoComplete="name"
+                maxLength={120}
+                disabled={Boolean(draft) || busy}
               />
               <Next
-                onNext={() => setStep(2)}
-                disabled={!form.email || !form.name}
+                onNext={() => {
+                  const problem = validateContact();
+                  setError(problem);
+                  if (!problem) setStep(2);
+                }}
+                disabled={busy || !form.email.trim() || !form.name.trim()}
                 label="Continue to delivery"
               />
             </StepCard>
@@ -244,19 +462,23 @@ export default function CheckoutFlow() {
                 value={form.address1}
                 onChange={(v) => set("address1", v)}
                 placeholder="Street"
+                autoComplete="address-line1"
+                disabled={Boolean(draft) || busy}
               />
               <Field
                 label="Apt / Suite (optional)"
                 value={form.address2}
                 onChange={(v) => set("address2", v)}
+                autoComplete="address-line2"
+                disabled={Boolean(draft) || busy}
               />
-              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 16 }}>
-                <Field label="City" value={form.city} onChange={(v) => set("city", v)} />
-                <Field label="State" value={form.state} onChange={(v) => set("state", v)} />
-                <Field label="ZIP" value={form.zip} onChange={(v) => set("zip", v)} />
+              <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr)", gap: "clamp(10px, 1.2vw, 16px)" }}>
+                <Field label="City" value={form.city} onChange={(v) => set("city", v)} autoComplete="address-level2" maxLength={100} disabled={Boolean(draft) || busy} />
+                <Field label="State" value={form.state} onChange={(v) => set("state", v.toUpperCase())} placeholder="TX" autoComplete="address-level1" maxLength={2} disabled={Boolean(draft) || busy} />
+                <Field label="ZIP" value={form.zip} onChange={(v) => set("zip", v)} autoComplete="postal-code" maxLength={10} disabled={Boolean(draft) || busy} />
               </div>
               <Next
-                onNext={preparePaymentStep}
+                onNext={() => void preparePaymentStep()}
                 disabled={
                   submitting ||
                   !form.address1 ||
@@ -276,22 +498,14 @@ export default function CheckoutFlow() {
                 site. You won&apos;t be sent to a separate checkout page unless
                 your bank requires an extra verification step.
               </p>
-              {error && (
-                <div
-                  role="alert"
-                  style={{
-                    background: "var(--paper-2)",
-                    padding: "12px 16px",
-                    fontSize: 13,
-                    color: "var(--ink-2)",
-                    borderLeft: "2px solid var(--ink)",
-                  }}
-                >
-                  {error}
-                </div>
+              {draft?.expiresAt && !expired && (
+                <p className="muted" style={{ fontSize: 12, lineHeight: 1.6 }}>
+                  Reserved for checkout until {new Date(draft.expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.
+                </p>
               )}
-              {clientSecret && stripePromise ? (
+              {clientSecret && stripePromise && draft ? (
                 <Elements
+                  key={draft.reservationId}
                   stripe={stripePromise}
                   options={{
                     clientSecret,
@@ -337,9 +551,12 @@ export default function CheckoutFlow() {
                 >
                   <EmbeddedPayment
                     clientSecret={clientSecret}
+                    reservationId={draft.reservationId}
                     total={total}
-                    clearCart={clearCart}
                     setError={setError}
+                    setPaying={setPaying}
+                    disabled={expired || cartChanged || submitting}
+                    onReleased={() => setExpired(true)}
                     billingDetails={{
                       name: form.name,
                       email: form.email,
@@ -356,7 +573,7 @@ export default function CheckoutFlow() {
                 </Elements>
               ) : (
                 <Next
-                  onNext={preparePaymentStep}
+                  onNext={() => void preparePaymentStep()}
                   disabled={submitting}
                   label={submitting ? "Preparing payment..." : "Load payment form"}
                 />
@@ -388,12 +605,12 @@ export default function CheckoutFlow() {
                 gap: 16,
               }}
             >
-              {cart.map((p, i) => (
+              {summaryItems.map((p) => (
                 <li
-                  key={i}
+                  key={p.id}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "56px 1fr auto",
+                    gridTemplateColumns: "56px minmax(0, 1fr) auto",
                     gap: 14,
                   }}
                 >
@@ -403,7 +620,7 @@ export default function CheckoutFlow() {
                   <div>
                     <div
                       className="serif italic"
-                      style={{ fontSize: 14, lineHeight: 1.3 }}
+                      style={{ fontSize: 14, lineHeight: 1.3, overflowWrap: "anywhere" }}
                     >
                       {p.title}
                     </div>
@@ -440,15 +657,21 @@ export default function CheckoutFlow() {
 
 function EmbeddedPayment({
   clientSecret,
+  reservationId,
   total,
-  clearCart,
   setError,
+  setPaying,
+  disabled,
+  onReleased,
   billingDetails,
 }: {
   clientSecret: string;
+  reservationId: string;
   total: number;
-  clearCart: () => void;
   setError: (message: string | null) => void;
+  setPaying: (value: boolean) => void;
+  disabled: boolean;
+  onReleased: () => void;
   billingDetails: {
     name: string;
     email: string;
@@ -464,42 +687,71 @@ function EmbeddedPayment({
 }) {
   const stripe = useStripe();
   const elements = useElements();
-  const [paying, setPaying] = useState(false);
+  const [paying, setLocalPaying] = useState(false);
+  const [cardReady, setCardReady] = useState(false);
+  const [cardComplete, setCardComplete] = useState(false);
+  const payingRef = useRef(false);
+
+  function showConfirmation() {
+    window.location.assign(`/checkout/success?reservation_id=${encodeURIComponent(reservationId)}`);
+  }
+
+  async function checkStatus() {
+    const result = await checkoutRequest<CheckoutStatus>("/api/checkout/status", { reservationId });
+    if (result.status === "paid" || result.status === "processing") {
+      showConfirmation();
+      return false;
+    }
+    if (result.status === "released") {
+      onReleased();
+      throw new Error("This reservation has ended. Update checkout to check availability again.");
+    }
+    if (result.status !== "pending") throw new Error("We couldn’t verify your checkout. Please try again.");
+    return true;
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!stripe || !elements) return;
+    if (!stripe || !elements || disabled || payingRef.current || !cardComplete) return;
 
     setError(null);
+    payingRef.current = true;
+    setLocalPaying(true);
     setPaying(true);
-    const card = elements.getElement(CardElement);
-    if (!card) {
-      setError("Card form is still loading. Please try again.");
+    try {
+      const card = elements.getElement(CardElement);
+      if (!card) throw new Error("Card form is still loading. Please try again.");
+      if (!await checkStatus()) return;
+
+      const result = await stripe.confirmCardPayment(clientSecret, {
+        payment_method: {
+          card,
+          billing_details: billingDetails,
+        },
+        return_url: `${window.location.origin}/checkout/success?reservation_id=${encodeURIComponent(reservationId)}`,
+      });
+
+      if (result.paymentIntent?.status === "succeeded" || result.paymentIntent?.status === "processing") {
+        // Only the server's status verification clears purchased paintings.
+        showConfirmation();
+        return;
+      }
+      if (result.error) {
+        // Preserve this PaymentIntent on declines and uncertain network
+        // responses. Verify it before offering a retry with the same id.
+        if (!await checkStatus()) return;
+        throw new Error(result.error.message ?? "Payment was not completed. Please check your card details and try again.");
+      }
+      throw new Error("Your bank verification was not completed. Please try again with this checkout.");
+    } catch (cause) {
+      setError(cause instanceof Error && cause.name !== "AbortError"
+        ? cause.message
+        : "We couldn’t confirm payment yet. Your checkout is saved; please check its status before trying again.");
+    } finally {
+      payingRef.current = false;
+      setLocalPaying(false);
       setPaying(false);
-      return;
     }
-
-    const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
-      payment_method: {
-        card,
-        billing_details: billingDetails,
-      },
-    });
-
-    if (error) {
-      setError(error.message ?? "Payment failed. Please try again.");
-      setPaying(false);
-      return;
-    }
-
-    if (paymentIntent?.status === "succeeded" || paymentIntent?.status === "processing") {
-      clearCart();
-      window.location.href = `/checkout/success?payment_intent=${paymentIntent.id}`;
-      return;
-    }
-
-    setError("Payment could not be completed. Please try again.");
-    setPaying(false);
   }
 
   return (
@@ -512,6 +764,11 @@ function EmbeddedPayment({
         }}
       >
         <CardElement
+          onReady={() => setCardReady(true)}
+          onChange={(event) => {
+            setCardComplete(event.complete);
+            if (event.error) setError(event.error.message);
+          }}
           options={{
             disableLink: true,
             hidePostalCode: true,
@@ -536,20 +793,23 @@ function EmbeddedPayment({
       </div>
       <button
         type="submit"
-        disabled={!stripe || !elements || paying}
+        disabled={!stripe || !elements || !cardReady || !cardComplete || paying || disabled}
         className="small-caps"
         style={{
           marginTop: 12,
           padding: "16px 24px",
-          background: !stripe || !elements || paying ? "var(--paper-3)" : "var(--ink)",
-          color: !stripe || !elements || paying ? "var(--ink-3)" : "var(--paper)",
+          background: !stripe || !elements || !cardComplete || paying || disabled ? "var(--paper-3)" : "var(--ink)",
+          color: !stripe || !elements || !cardComplete || paying || disabled ? "var(--ink-3)" : "var(--paper)",
           fontSize: 11,
           letterSpacing: "0.22em",
-          cursor: !stripe || !elements || paying ? "not-allowed" : "pointer",
+          cursor: !stripe || !elements || !cardComplete || paying || disabled ? "not-allowed" : "pointer",
         }}
       >
         {paying ? "Processing..." : `Pay securely · $${total}`}
       </button>
+      <Link href={`/checkout/success?reservation_id=${encodeURIComponent(reservationId)}`} style={{ alignSelf: "center", fontSize: 12, textDecoration: "underline", textUnderlineOffset: 3, pointerEvents: paying ? "none" : "auto" }} aria-disabled={paying} tabIndex={paying ? -1 : undefined}>
+        Check payment status
+      </Link>
     </form>
   );
 }
@@ -559,7 +819,7 @@ function StepCard({ title, children }: { title: string; children: React.ReactNod
     <div
       style={{
         border: "1px solid var(--line)",
-        padding: "32px 36px",
+        padding: "32px clamp(20px, 4vw, 36px)",
         background: "var(--paper)",
         display: "flex",
         flexDirection: "column",
@@ -583,25 +843,36 @@ function Field({
   onChange,
   placeholder,
   type = "text",
+  autoComplete,
+  maxLength = 200,
+  disabled,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   type?: string;
+  autoComplete?: string;
+  maxLength?: number;
+  disabled?: boolean;
 }) {
   return (
-    <label style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
       <span className="small-caps muted" style={{ fontSize: 10 }}>
         {label}
       </span>
       <input
         type={type}
+        autoComplete={autoComplete}
+        maxLength={maxLength}
+        disabled={disabled}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         style={{
           fontSize: 14,
+          width: "100%",
+          minWidth: 0,
           padding: "12px 2px",
           borderBottom: "1px solid var(--line)",
         }}

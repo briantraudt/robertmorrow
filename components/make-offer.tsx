@@ -6,8 +6,9 @@
 // Submits to /api/offers.
 // =======================================================================
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { IconClose } from "./icons";
+import { useModalDialog } from "./use-modal-dialog";
 import type { Painting } from "@/lib/types";
 
 export default function MakeOffer({ painting }: { painting: Painting }) {
@@ -26,20 +27,17 @@ export default function MakeOffer({ painting }: { painting: Painting }) {
 
   const set = (k: keyof typeof form, v: string) =>
     setForm((f) => ({ ...f, [k]: v }));
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dialogRef = useModalDialog<HTMLDivElement>(open, close);
 
-  useEffect(() => {
-    if (!open) return;
-    const h = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
-    };
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
-  }, [open]);
+  useEffect(() => () => {
+    if (resetTimer.current) clearTimeout(resetTimer.current);
+  }, []);
 
   function close() {
     setOpen(false);
     // reset after the transition
-    window.setTimeout(() => {
+    resetTimer.current = setTimeout(() => {
       setSent(false);
       setError(null);
       setForm({ amount: "", name: "", email: "", phone: "", message: "" });
@@ -85,7 +83,10 @@ export default function MakeOffer({ painting }: { painting: Painting }) {
   return (
     <>
       <button
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          if (resetTimer.current) clearTimeout(resetTimer.current);
+          setOpen(true);
+        }}
         className="small-caps"
         style={{
           width: "100%",
@@ -103,6 +104,8 @@ export default function MakeOffer({ painting }: { painting: Painting }) {
 
       {open && (
         <div
+          ref={dialogRef}
+          tabIndex={-1}
           role="dialog"
           aria-modal="true"
           aria-label={`Make an offer on ${painting.title}`}
@@ -160,7 +163,7 @@ export default function MakeOffer({ painting }: { painting: Painting }) {
                 <div className="serif italic" style={{ fontSize: 28, marginBottom: 14 }}>
                   Thank you.
                 </div>
-                <p className="muted" style={{ lineHeight: 1.7, fontSize: 14 }}>
+                <p role="status" className="muted" style={{ lineHeight: 1.7, fontSize: 14 }}>
                   Robert has your offer and will reply within a few days. If he
                   accepts, you&apos;ll receive an email with a secure payment link.
                 </p>
@@ -203,6 +206,7 @@ export default function MakeOffer({ painting }: { painting: Painting }) {
                   onChange={(v) => set("amount", v.replace(/[^0-9]/g, ""))}
                   placeholder={hasPrice ? `Up to $${painting.price}` : "Enter amount"}
                   inputMode="numeric"
+                  required
                 />
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
                   <OfferField

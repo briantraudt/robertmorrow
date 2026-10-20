@@ -23,10 +23,10 @@ export const metadata: Metadata = {
   },
 };
 
-export default function ContactPage({
+export default async function ContactPage({
   searchParams,
 }: {
-  searchParams: { subject?: string };
+  searchParams: Promise<{ subject?: string }>;
 }) {
   return (
     <section
@@ -58,7 +58,7 @@ export default function ContactPage({
         }}
       >
         <div>
-          <ContactForm defaultSubject={searchParams.subject || "General inquiry"} />
+          <ContactForm defaultSubject={(await searchParams).subject || "General inquiry"} />
         </div>
 
         <aside style={{ display: "flex", flexDirection: "column", gap: 28 }}>

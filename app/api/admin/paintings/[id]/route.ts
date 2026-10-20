@@ -1,248 +1,95 @@
-// =======================================================================
-// PATCH /api/admin/paintings/[id] — update fields and/or primary image
-// DELETE /api/admin/paintings/[id] — remove painting and dependent records
-// =======================================================================
-
+// Protected painting edits. Published slugs remain stable when titles change.
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { isAdmin } from "@/lib/admin-auth";
-import { findPainting as seedFind } from "@/lib/seed-data";
 import { DELETED_PAINTING_NOTE } from "@/lib/deleted-painting";
 import { revalidatePath } from "next/cache";
 import { forbiddenOriginResponse, isSameOrigin } from "@/lib/security";
+import { InputError, readFormJson, validatePainting } from "@/lib/admin-validation";
 
 export const runtime = "nodejs";
 
-const EDITABLE_FIELDS = [
-  "title",
-  "year",
-  "series",
-  "medium",
-  "w",
-  "h",
-  "price",
-  "status",
-  "framing",
-  "note",
-  "sort_order",
-] as const;
-
-function slugify(s: string) {
-  const slug = s
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-");
-  return slug || "painting";
-}
-
-async function uniqueSlug(
-  supabase: ReturnType<typeof createServerSupabaseClient>,
-  title: string,
-  currentId: string,
-) {
-  const base = slugify(title);
-  let slug = base;
-  let suffix = 2;
-
-  while (true) {
-    const { data, error } = await supabase
-      .from("paintings")
-      .select("id")
-      .eq("slug", slug)
-      .maybeSingle();
-    if (error) throw error;
-    if (!data || data.id === currentId) return slug;
-    slug = `${base}-${suffix}`;
-    suffix += 1;
-  }
-}
-
-export async function PATCH(
-  req: Request,
-  { params }: { params: { id: string } },
-) {
+export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
   if (!isSameOrigin(req)) return forbiddenOriginResponse();
-  if (!isAdmin()) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const params = await context.params;
   try {
-    const body = await req.json();
+    const { fields: update, image } = validatePainting(await readFormJson(req));
     const supabase = createServerSupabaseClient();
-    const current = await supabase
+    const { data: current, error: findError } = await supabase
       .from("paintings")
-      .select("id, slug, title")
+      .select("id, slug, title, year, status, note")
       .eq("id", params.id)
       .maybeSingle();
-    if (current.error) throw current.error;
-
-    // Whitelist fields we accept on update.
-    const update: Record<string, string | number | null> = {};
-    for (const key of EDITABLE_FIELDS) {
-      if (key in body) {
-        const v = body[key];
-        if (v === "" || v === undefined || v === null) {
-          if (key === "note" || key === "framing" || key === "sort_order") update[key] = null;
-          if (key === "year") update[key] = 0;
-        } else {
-          update[key] =
-            ["year", "w", "h", "price", "sort_order"].includes(key)
-              ? Number(v)
-              : String(v);
-        }
-      }
-    }
-    if ("title" in update) {
-      update.slug = await uniqueSlug(supabase, String(update.title), params.id);
-    }
-    if (Object.keys(update).length) {
-      update["updated_at"] = new Date().toISOString();
-      const { data: updated, error } = await supabase
-        .from("paintings")
-        .update(update)
-        .eq("id", params.id)
-        .select("id")
-        .maybeSingle();
-      if (error) throw error;
-      if (!updated) {
-        const seed = seedFind(params.id);
-        if (!seed) {
-          return NextResponse.json(
-            { error: "Painting not found." },
-            { status: 404 },
-          );
-        }
-        const { error: insertErr } = await supabase.from("paintings").insert({
-          id: seed.id,
-          slug: seed.slug,
-          title: seed.title,
-          year: seed.year,
-          series: seed.series,
-          medium: seed.medium,
-          w: seed.w,
-          h: seed.h,
-          price: seed.price,
-          status: seed.status,
-          framing: seed.framing ?? null,
-          note: seed.note ?? null,
-          palette: seed.palette ?? null,
-          aspect: seed.aspect ?? null,
-          ...update,
-        });
-        if (insertErr) throw insertErr;
-      }
-    }
-
-    // Optional new primary image.
-    if (body.imageUrl) {
-      // Demote any existing primary, then insert the new one as primary.
-      await supabase
-        .from("painting_images")
-        .update({ is_primary: false })
-        .eq("painting_id", params.id);
-
-      const { error: imgErr } = await supabase.from("painting_images").insert({
-        painting_id: params.id,
-        url: String(body.imageUrl),
-        alt: body.imageAlt ? String(body.imageAlt) : null,
-        width: body.imageWidth ? Number(body.imageWidth) : null,
-        height: body.imageHeight ? Number(body.imageHeight) : null,
-        is_primary: true,
-        sort_order: 0,
-      });
-      if (imgErr) throw imgErr;
-    }
-
-    revalidatePath("/");
-    revalidatePath(`/paintings/${params.id}`);
-    if (current.data?.slug) revalidatePath(`/paintings/${current.data.slug}`);
-    if (typeof update.slug === "string") revalidatePath(`/paintings/${update.slug}`);
-    revalidatePath("/admin");
-    return NextResponse.json({ ok: true });
-  } catch (err) {
-    console.error("[api/admin/paintings PATCH]", err);
-    const message = err instanceof Error ? err.message : "Server error";
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
-}
-
-export async function DELETE(
-  req: Request,
-  { params }: { params: { id: string } },
-) {
-  if (!isSameOrigin(req)) return forbiddenOriginResponse();
-  if (!isAdmin()) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  try {
-    const supabase = createServerSupabaseClient();
-    const { data: painting, error: findErr } = await supabase
-      .from("paintings")
-      .select("id, slug")
-      .eq("id", params.id)
-      .maybeSingle();
-    if (findErr) throw findErr;
-
-    const seed = seedFind(params.id) || (painting?.slug ? seedFind(painting.slug) : undefined);
-
-    if (!painting && !seed) {
+    if (findError) throw findError;
+    if (!current || current.note === DELETED_PAINTING_NOTE) {
       return NextResponse.json({ error: "Painting not found." }, { status: 404 });
     }
-    const paintingId = painting?.id ?? seed!.id;
-    const paintingSlug = painting?.slug ?? seed!.slug;
+    if (update.note === DELETED_PAINTING_NOTE) throw new InputError("That note is reserved for deleted paintings.");
+    if (update.status && update.status !== current.status && current.status === "sold") {
+      return NextResponse.json({ error: "A sold painting cannot be made available again." }, { status: 409 });
+    }
 
-    // Remove dependent rows explicitly so admin deletion works even if the
-    // deployed database was created before the cascade constraints existed.
-    const { error: offersErr } = await supabase
-      .from("offers")
-      .delete()
-      .eq("painting_id", paintingId);
-    if (offersErr) throw offersErr;
+    const { error } = await supabase.rpc("rm_admin_save_painting", {
+      p_id: params.id,
+      p_fields: update,
+      p_image: image,
+      p_create: false,
+      p_expected_status: current.status,
+    });
+    if (error) {
+      if (error.code === "P0001") return NextResponse.json({ error: error.message }, { status: 409 });
+      throw error;
+    }
 
-    // Storage objects remain — cheap, and useful as a backup if a deletion was accidental.
-    const { error: imagesErr } = await supabase
-      .from("painting_images")
-      .delete()
-      .eq("painting_id", paintingId);
-    if (imagesErr) throw imagesErr;
+    revalidatePath("/");
+    revalidatePath(`/paintings/${current.slug}`);
+    revalidatePath("/admin");
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    if (error instanceof InputError) return NextResponse.json({ error: error.message }, { status: error.status });
+    console.error("[api/admin/paintings PATCH]", error);
+    return NextResponse.json({ error: "Could not save the painting. Please refresh and try again." }, { status: 500 });
+  }
+}
 
-    if (seed) {
-      const { error: tombstoneErr } = await supabase.from("paintings").upsert(
-        {
-          id: seed.id,
-          slug: seed.slug,
-          title: seed.title,
-          year: seed.year,
-          series: seed.series,
-          medium: seed.medium,
-          w: seed.w,
-          h: seed.h,
-          price: seed.price,
-          status: seed.status,
-          framing: seed.framing ?? null,
-          note: DELETED_PAINTING_NOTE,
-          palette: seed.palette ?? null,
-          aspect: seed.aspect ?? null,
-        },
-        { onConflict: "id" },
-      );
-      if (tombstoneErr) throw tombstoneErr;
-    } else {
-      const { error } = await supabase
-        .from("paintings")
-        .delete()
-        .eq("id", paintingId);
-      if (error) throw error;
+export async function DELETE(req: Request, context: { params: Promise<{ id: string }> }) {
+  if (!isSameOrigin(req)) return forbiddenOriginResponse();
+  if (!(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const params = await context.params;
+  try {
+    const supabase = createServerSupabaseClient();
+    const { data: painting, error: findError } = await supabase
+      .from("paintings")
+      .select("id, slug, status, note")
+      .eq("id", params.id)
+      .maybeSingle();
+    if (findError) throw findError;
+    if (!painting) return NextResponse.json({ error: "Painting not found." }, { status: 404 });
+    if (painting.note === DELETED_PAINTING_NOTE) return NextResponse.json({ ok: true });
+    if (painting.status !== "available") {
+      return NextResponse.json({ error: "Reserved and sold paintings cannot be deleted. Their order records must be preserved." }, { status: 409 });
+    }
+
+    // Hide from the storefront while preserving images, offers and sale history.
+    const { error } = await supabase.rpc("rm_admin_save_painting", {
+      p_id: painting.id,
+      p_fields: { note: DELETED_PAINTING_NOTE },
+      p_image: null,
+      p_create: false,
+      p_expected_status: "available",
+    });
+    if (error) {
+      if (error.code === "P0001") return NextResponse.json({ error: error.message }, { status: 409 });
+      throw error;
     }
 
     revalidatePath("/");
     revalidatePath("/admin");
-    revalidatePath(`/paintings/${paintingSlug}`);
+    revalidatePath(`/paintings/${painting.slug}`);
     return NextResponse.json({ ok: true });
-  } catch (err) {
-    console.error("[api/admin/paintings DELETE]", err);
-    const message = err instanceof Error ? err.message : "Server error";
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch (error) {
+    console.error("[api/admin/paintings DELETE]", error);
+    return NextResponse.json({ error: "Could not delete the painting. Please try again." }, { status: 500 });
   }
 }

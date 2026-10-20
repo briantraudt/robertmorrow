@@ -66,6 +66,7 @@ function GalleryCard({
       <Link
         href={`/paintings/${painting.slug}`}
         onClick={(e) => {
+          if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
           // Intercept for in-page panel overlay; still deep-linkable via URL.
           e.preventDefault();
           onOpen();
@@ -143,7 +144,7 @@ function GalleryCard({
               textDecoration: sold ? "line-through" : "none",
             }}
           >
-            {priceLabel}
+            {painting.status === "reserved" ? "Reserved" : priceLabel}
           </div>
         </div>
       </Link>

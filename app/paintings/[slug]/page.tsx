@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Detail from "@/components/detail";
-import { getPainting, getPaintings } from "@/lib/paintings";
+import { getPainting } from "@/lib/paintings";
 import {
   absoluteUrl,
   jsonLdScript,
@@ -12,31 +12,27 @@ import {
   siteName,
 } from "@/lib/seo";
 
-export const revalidate = 60;
-
-export async function generateStaticParams() {
-  const paintings = await getPaintings();
-  return paintings.map((p) => ({ slug: p.slug }));
-}
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
   params,
 }: {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
-  const p = await getPainting(params.slug);
+  const { slug } = await params;
+  const p = await getPainting(slug);
   if (!p) return { title: "Painting not found" };
   const title = paintingTitle(p);
   const description = paintingDescription(p);
   const image = p.images?.[0];
   return {
-    title: `${title} — Original Acrylic Painting for Sale`,
+    title: `${title} — Original ${/oil/i.test(p.medium) ? "Oil" : "Acrylic"} Painting${p.status === "available" ? " for Sale" : ""}`,
     description,
     keywords: [
       ...seoKeywords,
       p.title,
       `${p.medium} for sale`,
-      `${p.w} x ${p.h} acrylic painting`,
+      `${p.w} x ${p.h} ${p.medium}`,
     ],
     alternates: {
       canonical: `/paintings/${p.slug}`,
@@ -53,7 +49,7 @@ export async function generateMetadata({
               url: absoluteUrl(image.url),
               width: image.width,
               height: image.height,
-              alt: image.alt || `${title} by Texas artist Robert Morrow`,
+              alt: `${title} by Texas artist Robert Morrow`,
             },
           ]
         : undefined,
@@ -70,9 +66,10 @@ export async function generateMetadata({
 export default async function PaintingPage({
   params,
 }: {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 }) {
-  const painting = await getPainting(params.slug);
+  const { slug } = await params;
+  const painting = await getPainting(slug);
   if (!painting) notFound();
   return (
     <>

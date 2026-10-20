@@ -11,7 +11,7 @@ import {
   siteName,
 } from "@/lib/seo";
 
-export const revalidate = 60; // re-render at most every minute
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Robert Morrow Paintings from Spicewood, Texas",
@@ -44,7 +44,7 @@ export const metadata: Metadata = {
 };
 
 export default async function HomePage() {
-  const paintings = await getPaintings();
+  const paintings = (await getPaintings()).filter((p) => p.status !== "sold");
   const collectionJsonLd = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
@@ -73,6 +73,9 @@ export default async function HomePage() {
 
   return (
     <>
+      <h1 style={{ position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clipPath: "inset(50%)", whiteSpace: "nowrap", border: 0 }}>
+        Original paintings by Robert Morrow
+      </h1>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={jsonLdScript([artistJsonLd(), collectionJsonLd])}

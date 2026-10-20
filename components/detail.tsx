@@ -6,6 +6,7 @@ import { useCart } from "./cart-provider";
 import PaintingImage from "./painting-image";
 import MakeOffer from "./make-offer";
 import { IconArrowLeft } from "./icons";
+import { useModalDialog } from "./use-modal-dialog";
 import type { Painting } from "@/lib/types";
 
 type Props = {
@@ -23,33 +24,39 @@ export default function Detail({ painting, onClose }: Props) {
     onClose ??
     (() => {
       closeDetail();
+      if (painting) {
+        router.push("/");
+        return;
+      }
       // Drop the painting slug from the URL if we pushed it.
       if (typeof window !== "undefined" && window.location.pathname.startsWith("/paintings/")) {
         router.back();
       }
     });
 
+  const dialogRef = useModalDialog<HTMLDivElement>(Boolean(p), handleClose);
+
   useEffect(() => {
-    if (!p) return;
-    const h = (e: KeyboardEvent) => {
-      if (e.key === "Escape") handleClose();
+    if (painting || !p) return;
+    const handlePopState = () => {
+      if (window.location.pathname !== `/paintings/${p.slug}`) closeDetail();
     };
-    window.addEventListener("keydown", h);
-    document.body.style.overflow = "hidden";
-    return () => {
-      window.removeEventListener("keydown", h);
-      document.body.style.overflow = "";
-    };
-  }, [p, handleClose]);
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [painting, p, closeDetail]);
 
   if (!p) return null;
   const sold = p.status === "sold";
+  const reserved = p.status === "reserved";
+  const available = p.status === "available";
   const hasPrice = p.price > 0;
   const hasYear = p.year > 0;
   const inCart = isInCart(p.id);
 
   return (
     <div
+      ref={dialogRef}
+      tabIndex={-1}
       style={{
         position: "fixed",
         inset: 0,
@@ -226,29 +233,31 @@ export default function Detail({ painting, onClose }: Props) {
               }}
             >
               <button
-                disabled={sold || !hasPrice}
-                onClick={() => !sold && hasPrice && addToCart(p)}
+                disabled={!available || !hasPrice}
+                onClick={() => available && hasPrice && addToCart(p)}
                 className="small-caps"
                 style={{
                   width: "100%",
                   padding: "18px 24px",
-                  background: sold || !hasPrice ? "var(--paper-3)" : "var(--ink)",
-                  color: sold || !hasPrice ? "var(--ink-3)" : "var(--paper)",
+                  background: !available || !hasPrice ? "var(--paper-3)" : "var(--ink)",
+                  color: !available || !hasPrice ? "var(--ink-3)" : "var(--paper)",
                   fontSize: 11,
                   letterSpacing: "0.22em",
-                  cursor: sold || !hasPrice ? "not-allowed" : "pointer",
+                  cursor: !available || !hasPrice ? "not-allowed" : "pointer",
                   transition: "background .2s",
                 }}
               >
                 {sold
                   ? "This work has sold"
+                  : reserved
+                    ? "This work is reserved"
                   : !hasPrice
                     ? "Price to be added"
                   : inCart
                     ? "Added to cart ✓"
                     : `Add to cart · $${p.price}`}
               </button>
-              {!sold && <MakeOffer painting={p} />}
+              {available && <MakeOffer painting={p} />}
               <div className="muted" style={{ fontSize: 11.5, textAlign: "center" }}>
                 Questions?{" "}
                 <a

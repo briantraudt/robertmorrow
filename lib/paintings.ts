@@ -1,238 +1,64 @@
-// =======================================================================
-// Painting data access — reads from Supabase, falls back to seed data.
-// Usage:
-//   const paintings = await getPaintings();
-// =======================================================================
-
 import "server-only";
 import { createServerSupabaseClient } from "./supabase/server";
 import { DELETED_PAINTING_NOTE } from "./deleted-painting";
-import { SEED_PAINTINGS, findPainting as seedFind } from "./seed-data";
-import type { Painting } from "./types";
+import { SEED_PAINTINGS } from "./seed-data";
+import type { Painting, PaintingImage } from "./types";
 
-const SEED_SLUGS = new Set(SEED_PAINTINGS.map((p) => p.slug));
+const COLUMNS = "id, slug, title, year, series, medium, w, h, price, status, framing, note, palette, aspect";
+// Import photographs can be reused; seed prices/status are never inventory.
 const SEED_BY_ID = new Map(SEED_PAINTINGS.map((p) => [p.id, p]));
 const SEED_BY_SLUG = new Map(SEED_PAINTINGS.map((p) => [p.slug, p]));
-const FRAMED_SLUGS = new Set([
-  "img-2329",
-  "img-2330",
-  "img-2359",
-  "img-2360",
-  "img-2373",
-  "img-2398",
-  "img-2421",
-]);
+const FRAMED_SLUGS = new Set(["img-2329", "img-2330", "img-2359", "img-2360", "img-2373", "img-2398", "img-2421"]);
 
-function sizeGroup(painting: Painting) {
-  const longSide = Math.max(painting.w, painting.h);
-  const shortSide = Math.min(painting.w, painting.h);
-  return { longSide, shortSide };
-}
-
-function sortForGallery(paintings: Painting[]): Painting[] {
-  return [...paintings].sort((a, b) => {
-    const aFramed = FRAMED_SLUGS.has(a.slug);
-    const bFramed = FRAMED_SLUGS.has(b.slug);
-    if (aFramed !== bFramed) return aFramed ? 1 : -1;
-
-    const aSize = sizeGroup(a);
-    const bSize = sizeGroup(b);
-    if (aSize.longSide !== bSize.longSide) return bSize.longSide - aSize.longSide;
-    if (aSize.shortSide !== bSize.shortSide) return bSize.shortSide - aSize.shortSide;
-    if (a.w !== b.w) return b.w - a.w;
-    if (a.h !== b.h) return b.h - a.h;
-    return a.title.localeCompare(b.title, undefined, { numeric: true });
-  });
-}
-
-function mergeSeedWithDb(seed: Painting, db?: Partial<Painting>): Painting {
-  if (!db) return seed;
-  return {
-    ...seed,
-    ...db,
-    framing: db.framing ?? seed.framing ?? null,
-    images: db.images?.length ? db.images : seed.images,
-  };
-}
-
-function withDefaultFraming(painting: Painting): Painting {
+function withImages(painting: Painting, images: PaintingImage[]): Painting {
+  const seed = SEED_BY_ID.get(painting.id) ?? SEED_BY_SLUG.get(painting.slug);
+  const photos = images.length ? images : seed?.images ?? [];
   return {
     ...painting,
     framing: painting.framing ?? "Unframed; shipped flat",
+    images: [...photos].sort((a, b) => Number(!!b.is_primary) - Number(!!a.is_primary) || (a.sort_order ?? 0) - (b.sort_order ?? 0)),
   };
 }
 
-function mergeSeedImagesForList(painting: Painting): Painting {
-  const seed = SEED_BY_ID.get(painting.id) ?? SEED_BY_SLUG.get(painting.slug);
-  if (!seed || painting.images?.length) return painting;
-  return {
-    ...painting,
-    images: seed.images,
-  };
+function sortForGallery(paintings: Painting[]): Painting[] {
+  return [...paintings].sort((a, b) =>
+    Number(FRAMED_SLUGS.has(a.slug)) - Number(FRAMED_SLUGS.has(b.slug)) ||
+    Math.max(b.w, b.h) - Math.max(a.w, a.h) ||
+    Math.min(b.w, b.h) - Math.min(a.w, a.h) || b.w - a.w || b.h - a.h ||
+    a.title.localeCompare(b.title, undefined, { numeric: true }),
+  );
 }
 
 export async function getPaintings(): Promise<Painting[]> {
-  try {
-    const supabase = createServerSupabaseClient();
-
-    // Two separate queries, joined in JS — more robust than PostgREST embedded
-    // resources, which can silently fail on relationship inference.
-    let paintingsRes: any = await supabase
-        .from("paintings")
-        .select(
-          "id, slug, title, year, series, medium, w, h, price, status, framing, note, palette, aspect",
-        )
-        .order("sort_order", { ascending: true, nullsFirst: false });
-    if (
-      paintingsRes.error &&
-      /framing/i.test(`${paintingsRes.error.message} ${paintingsRes.error.details ?? ""}`)
-    ) {
-      paintingsRes = await supabase
-        .from("paintings")
-        .select(
-          "id, slug, title, year, series, medium, w, h, price, status, note, palette, aspect",
-        )
-        .order("sort_order", { ascending: true, nullsFirst: false });
-    }
-
-    const imagesRes = await supabase
-        .from("painting_images")
-        .select("painting_id, url, alt, width, height, is_primary, sort_order");
-
-    if (paintingsRes.error) {
-      console.error(
-        "RMDBG paintings error:",
-        JSON.stringify({
-          message: paintingsRes.error.message,
-          code: paintingsRes.error.code,
-          details: paintingsRes.error.details,
-          hint: paintingsRes.error.hint,
-        }),
-      );
-      throw paintingsRes.error;
-    }
-    if (imagesRes.error) {
-      console.error(
-        "RMDBG images error:",
-        JSON.stringify({
-          message: imagesRes.error.message,
-          code: imagesRes.error.code,
-          details: imagesRes.error.details,
-          hint: imagesRes.error.hint,
-        }),
-      );
-      // Don't throw — degrade gracefully to paintings-without-images.
-    }
-
-    // Group images by painting_id.
-    const byPainting = new Map<string, Painting["images"]>();
-    for (const img of imagesRes.data ?? []) {
-      const list = byPainting.get(img.painting_id) ?? [];
-      list.push({
-        url: img.url,
-        alt: img.alt,
-        width: img.width,
-        height: img.height,
-        is_primary: img.is_primary,
-        sort_order: img.sort_order,
-      });
-      byPainting.set(img.painting_id, list);
-    }
-
-    const rows = (paintingsRes.data ?? []) as Array<{ id: string; slug: string } & Partial<Painting>>;
-    if (rows.length === 0) return sortForGallery(SEED_PAINTINGS);
-
-    const dbSeedKeys = new Set(rows.flatMap((p) => [p.id, p.slug]));
-    const dbPaintings = rows
-      .filter((p) => p.note !== DELETED_PAINTING_NOTE)
-      .map((p) =>
-        withDefaultFraming(mergeSeedImagesForList({
-          ...(p as unknown as Painting),
-          images: byPainting.get(p.id) ?? [],
-        })),
-      );
-    const missingSeedPaintings = SEED_PAINTINGS.filter(
-      (p) => !dbSeedKeys.has(p.id) && !dbSeedKeys.has(p.slug),
-    );
-
-    return sortForGallery([...dbPaintings, ...missingSeedPaintings.map(withDefaultFraming)]);
-  } catch (err) {
-    const safeErr =
-      err instanceof Error
-        ? { name: err.name, message: err.message, stack: err.stack?.slice(0, 400) }
-        : { raw: String(err) };
-    console.error("RMDBG getPaintings catch:", JSON.stringify(safeErr));
-    console.error("RMDBG getPaintings env:", JSON.stringify({
-      hasUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-      hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-      hasAnon: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      urlStart: process.env.NEXT_PUBLIC_SUPABASE_URL?.slice(0, 30) ?? null,
-    }));
-    return sortForGallery(SEED_PAINTINGS);
+  const supabase = createServerSupabaseClient();
+  const [paintingsRes, imagesRes] = await Promise.all([
+    supabase.from("paintings").select(COLUMNS).order("sort_order", { ascending: true, nullsFirst: false }),
+    supabase.from("painting_images").select("painting_id, url, alt, width, height, is_primary, sort_order"),
+  ]);
+  if (paintingsRes.error) throw new Error("The painting catalog is temporarily unavailable.", { cause: paintingsRes.error });
+  if (imagesRes.error) throw new Error("Painting photographs are temporarily unavailable.", { cause: imagesRes.error });
+  const byPainting = new Map<string, PaintingImage[]>();
+  for (const img of imagesRes.data ?? []) {
+    const photos = byPainting.get(img.painting_id) ?? [];
+    photos.push(img);
+    byPainting.set(img.painting_id, photos);
   }
+  return sortForGallery((paintingsRes.data as unknown as Painting[])
+    .filter((p) => p.note !== DELETED_PAINTING_NOTE)
+    .map((p) => withImages(p, byPainting.get(p.id) ?? [])));
 }
 
-export async function getPainting(
-  idOrSlug: string,
-): Promise<Painting | null> {
-  const seedPainting = seedFind(idOrSlug);
-  try {
-    const supabase = createServerSupabaseClient();
-    let paintingRes: any = await supabase
-      .from("paintings")
-      .select(
-        "id, slug, title, year, series, medium, w, h, price, status, framing, note, palette, aspect",
-      )
-      .or(`id.eq.${idOrSlug},slug.eq.${idOrSlug}`)
-      .maybeSingle();
-    if (
-      paintingRes.error &&
-      /framing/i.test(`${paintingRes.error.message} ${paintingRes.error.details ?? ""}`)
-    ) {
-      paintingRes = await supabase
-        .from("paintings")
-        .select(
-          "id, slug, title, year, series, medium, w, h, price, status, note, palette, aspect",
-        )
-        .or(`id.eq.${idOrSlug},slug.eq.${idOrSlug}`)
-        .maybeSingle();
-    }
-    const { data: painting, error } = paintingRes;
-    if (error) {
-      console.error(
-        "RMDBG getPainting error:",
-        JSON.stringify({
-          message: error.message,
-          code: error.code,
-          details: error.details,
-          hint: error.hint,
-        }),
-      );
-      throw error;
-    }
-    if (painting) {
-      if ((painting as Partial<Painting>).note === DELETED_PAINTING_NOTE) {
-        return null;
-      }
-      if (seedPainting) {
-        return withDefaultFraming(mergeSeedWithDb(seedPainting, painting as unknown as Partial<Painting>));
-      }
-      const { data: images } = await supabase
-        .from("painting_images")
-        .select("url, alt, width, height, is_primary, sort_order")
-        .eq("painting_id", (painting as { id: string }).id);
-      return {
-        ...(painting as unknown as Painting),
-        framing: (painting as unknown as Painting).framing ?? "Unframed; shipped flat",
-        images: images ?? [],
-      };
-    }
-  } catch (err) {
-    const safeErr =
-      err instanceof Error
-        ? { name: err.name, message: err.message, stack: err.stack?.slice(0, 400) }
-        : { raw: String(err) };
-    console.error("RMDBG getPainting catch:", JSON.stringify(safeErr));
-  }
-  return seedPainting ? withDefaultFraming(seedPainting) : null;
+export async function getPainting(idOrSlug: string): Promise<Painting | null> {
+  if (!/^[a-zA-Z0-9_-]{1,160}$/.test(idOrSlug)) return null;
+  const supabase = createServerSupabaseClient();
+  let result = await supabase.from("paintings").select(COLUMNS).eq("id", idOrSlug).maybeSingle();
+  if (result.error) throw new Error("The painting is temporarily unavailable.", { cause: result.error });
+  if (!result.data) result = await supabase.from("paintings").select(COLUMNS).eq("slug", idOrSlug).maybeSingle();
+  if (result.error) throw new Error("The painting is temporarily unavailable.", { cause: result.error });
+  if (!result.data || result.data.note === DELETED_PAINTING_NOTE) return null;
+  const painting = result.data as unknown as Painting;
+  const images = await supabase.from("painting_images")
+    .select("url, alt, width, height, is_primary, sort_order").eq("painting_id", painting.id);
+  if (images.error) throw new Error("Painting photographs are temporarily unavailable.", { cause: images.error });
+  return withImages(painting, images.data ?? []);
 }
