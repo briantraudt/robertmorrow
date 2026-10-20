@@ -161,6 +161,28 @@ select public.finalize_inventory_sale('pi_inventory_service_role',array['invento
 reset role;
 select pg_temp.assert_true((select status='sold' from public.paintings where id='inventory-test-release-offer'),'service_role executes full inventory lifecycle');
 
+-- An owner-confirmed test keeps a private payment tombstone, not stock ownership.
+insert into public.paintings(id,slug,title,year,series,medium,w,h,price,status) values
+('inventory-test-void','inventory-test-void','Retired test painting',2026,'abstract','Acrylic on canvas',20,16,400,'available');
+insert into public.orders(stripe_session_id,stripe_payment_intent,amount_total,currency,status,painting_ids)
+values('pi_inventory_void','pi_inventory_void',500,'usd','void_test',array['inventory-test-void']);
+set local role service_role;
+select pg_temp.assert_true(public.finalize_inventory_sale('pi_inventory_void',array['inventory-test-void'],500,'usd',null,null,null)->>'status'='void_test','retired test replay is acknowledged without a sale');
+select pg_temp.assert_true((select status='available' from public.paintings where id='inventory-test-void'),'retired test replay leaves painting available');
+select pg_temp.assert_true((select count(*)=0 from public.inventory_sales where painting_id='inventory-test-void'),'retired test replay creates no stock owner');
+select pg_temp.expect_error($q$select public.finalize_inventory_sale('pi_inventory_void',array['inventory-test-void'],40000,'usd',null,null,null)$q$,'does not match');
+select pg_temp.expect_error($q$select public.finalize_inventory_sale('pi_inventory_void',array['inventory-test-c'],500,'usd',null,null,null)$q$,'does not match');
+select public.reserve_inventory('20000000-0000-4000-8000-000000000009',array['inventory-test-void'],'{}');
+select public.bind_inventory_payment('20000000-0000-4000-8000-000000000009','pi_inventory_genuine_after_void');
+select pg_temp.assert_true(public.finalize_inventory_sale('pi_inventory_void',array['inventory-test-void'],500,'usd',null,null,null)->>'status'='void_test','retired test replay does not conflict with a new checkout');
+select pg_temp.assert_true((select count(*)=1 from public.inventory_holds where painting_id='inventory-test-void' and reservation_id='20000000-0000-4000-8000-000000000009'),'new buyer keeps their hold after a retired test replay');
+select pg_temp.assert_true(public.finalize_inventory_sale('pi_inventory_genuine_after_void',array['inventory-test-void'],40000,'usd',null,null,null,'20000000-0000-4000-8000-000000000009')->>'status'='paid','genuine payment can purchase a previously test-sold painting');
+select pg_temp.assert_true(public.finalize_inventory_sale('pi_inventory_void',array['inventory-test-void'],500,'usd',null,null,null)->>'status'='void_test','retired test replay remains ignored after a genuine sale');
+select pg_temp.assert_true((select stripe_payment_intent='pi_inventory_genuine_after_void' from public.inventory_sales where painting_id='inventory-test-void'),'retired test cannot replace genuine ownership');
+select pg_temp.expect_error($q$update public.paintings set status='available' where id='inventory-test-void'$q$,'cannot be made available');
+select pg_temp.assert_true((select status='void_test' from public.orders where stripe_payment_intent='pi_inventory_void'),'retired payment stays marked as a test');
+reset role;
+
 -- Privileges are part of the invariant: clients cannot reserve, release, sell,
 -- read buyer details, or discover a reservation capability through the Data API.
 select pg_temp.assert_true(not has_function_privilege('anon','public.reserve_inventory(uuid,text[],jsonb,uuid)','EXECUTE'),'anon cannot reserve');

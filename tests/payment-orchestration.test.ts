@@ -175,6 +175,32 @@ function eventRequest(object = intent({ status: "succeeded" }), signature = WEBH
   return new Request("https://art.test.invalid/api/webhook", { method: "POST", headers: { "stripe-signature": signature }, body: JSON.stringify({ id: "evt_synthetic", type: "payment_intent.succeeded", data: { object } }) });
 }
 
+test("a retired test payment is released without reporting a purchase or changing its reservation", async () => {
+  const f = fixture();
+  f.rpcHandler = async (name: string) => name === "finalize_inventory_sale"
+    ? { data: { status: "void_test", order_id: "synthetic-test-order", painting_ids: ["original-one"], already_recorded: true }, error: null }
+    : undefined;
+  const result = await api.finalizePayment(intent({ status: "succeeded", metadata: { painting_ids: "original-one" } }));
+  assert.deepEqual(result, { status: "released" });
+  assert.equal(f.stored.status, "pending");
+  assert.equal(count(f, "rpc:finalize_inventory_sale"), 1);
+  assert.equal(count(f, "rpc:release_inventory"), 0);
+  assert.equal(count(f, "stripe:create"), 0);
+});
+
+test("a verified replay of a retired test payment is acknowledged without another sale", async () => {
+  const f = fixture();
+  f.rpcHandler = async (name: string) => name === "finalize_inventory_sale"
+    ? { data: { status: "void_test", order_id: "synthetic-test-order", painting_ids: ["original-one"], already_recorded: true }, error: null }
+    : undefined;
+  const response = await api.webhookPost(eventRequest(intent({ status: "succeeded", metadata: { painting_ids: "original-one" } })));
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { received: true });
+  assert.equal(count(f, "stripe:signature"), 1);
+  assert.equal(count(f, "rpc:finalize_inventory_sale"), 1);
+  assert.equal(f.stored.status, "pending");
+});
+
 test("a Stripe client secret is not returned before the payment is bound to the inventory hold", async () => {
   const r = reservation();
   const f = fixture(r);

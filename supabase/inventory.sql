@@ -228,6 +228,19 @@ begin
     raise exception 'Painting IDs must be nonempty and unique.';
   end if;
   perform pg_advisory_xact_lock(hashtextextended('rm-payment:' || p_payment_intent, 0));
+  -- Keep the identity of an owner-confirmed test payment after its inventory
+  -- is restored. A delayed webhook or legacy reconciliation must not sell it
+  -- again, including while a later genuine buyer holds or owns the painting.
+  select * into v_order from public.orders
+    where stripe_payment_intent = p_payment_intent and status = 'void_test' for update;
+  if found then
+    select array_agg(x order by x) into v_order_ids from (select distinct unnest(v_order.painting_ids) x) s;
+    if v_order_ids is distinct from v_ids or v_order.amount_total is distinct from p_amount_total
+      or lower(v_order.currency) is distinct from lower(p_currency) then
+      raise exception 'Retired test payment does not match its recorded details.';
+    end if;
+    return jsonb_build_object('order_id',v_order.id,'painting_ids',v_ids,'status','void_test','already_recorded',true);
+  end if;
   if v_res_id is null then
     select id into v_res_id from public.inventory_reservations
     where stripe_payment_intent = p_payment_intent or (p_session_id is not null and stripe_session_id = p_session_id);

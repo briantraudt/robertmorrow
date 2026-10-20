@@ -124,7 +124,7 @@ export async function finalizePayment(intent: Stripe.PaymentIntent, session?: St
     if (session.payment_status !== "paid" || pi !== intent.id || session.mode !== "payment") throw new Error("Checkout payment has not been verified.");
     if (reservation && session.metadata?.reservation_id !== reservation.id) throw new Error("Checkout reservation does not match payment.");
   }
-  await rpc("finalize_inventory_sale", {
+  const result = await rpc<{ status: "paid" | "void_test" }>("finalize_inventory_sale", {
     p_payment_intent: intent.id, p_painting_ids: ids,
     p_amount_total: intent.amount_received, p_currency: intent.currency,
     p_email: intent.receipt_email ?? session?.customer_details?.email ?? session?.customer_email ?? null,
@@ -133,6 +133,10 @@ export async function finalizePayment(intent: Stripe.PaymentIntent, session?: St
     p_reservation_id: reservationId, p_session_id: session?.id ?? null,
   });
   refreshCatalog(reservation ?? undefined);
+  // An owner-confirmed test payment remains a private replay tombstone. It
+  // acknowledges old callbacks without reporting a new purchase to the client.
+  if (result.status === "void_test") return { status: "released" };
+  if (result.status !== "paid") throw new Error("Payment fulfillment did not confirm a paid order.");
   return { status: "paid", paintingIds: ids, orderRef: intent.id.slice(-10).toUpperCase() };
 }
 

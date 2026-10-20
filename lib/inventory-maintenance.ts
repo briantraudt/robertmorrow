@@ -2,7 +2,7 @@ import "server-only";
 import type Stripe from "stripe";
 import { getStripe } from "./stripe";
 import { createServerSupabaseClient } from "./supabase/server";
-import { finalizePayment, finalizeSession, paintingIdsFromMetadata, ensureCartPayment, ensureOfferSession, reconcileExpiredInventory, type Reservation } from "./inventory";
+import { finalizePayment, finalizeSession, paintingIdsFromMetadata, ensureCartPayment, ensureOfferSession, reconcileExpiredInventory, type PurchaseState, type Reservation } from "./inventory";
 
 export async function recoverInventory() {
   const supabase = createServerSupabaseClient();
@@ -81,7 +81,14 @@ export async function reconcileLegacyPayments() {
   if (known.error) throw known.error;
   const knownIds = new Set((known.data ?? []).map((p) => p.id));
   const belongsToSite = (metadata: Stripe.Metadata | null | undefined) => { const ids = paintingIdsFromMetadata(metadata); return ids.length > 0 && ids.every((id) => knownIds.has(id)); };
-  const counts = { linksDisabled: 0, sessionsExpired: 0, intentsCanceled: 0, salesRecorded: 0, processingRetained: 0, errors: 0, historyIncomplete: false };
+  const counts = { linksDisabled: 0, sessionsExpired: 0, intentsCanceled: 0, salesRecorded: 0, testSalesIgnored: 0, processingRetained: 0, errors: 0, historyIncomplete: false };
+  const recordSaleResult = (result: PurchaseState) => {
+    if (result.status === "paid") counts.salesRecorded++;
+    // This helper is called only for provider-confirmed paid objects. A
+    // released result means the database recognized a retired test payment.
+    else if (result.status === "released") counts.testSalesIgnored++;
+    else throw new Error("A completed payment could not be reconciled.");
+  };
   const processingPaintingIds = new Set<string>();
   const retainProcessing = (metadata: Stripe.Metadata | null | undefined) => {
     counts.processingRetained++;
@@ -115,14 +122,14 @@ export async function reconcileLegacyPayments() {
         if (id) sessionIntentIds.add(id);
       };
       rememberIntent();
-      if (session.payment_status === "paid") { await finalizeSession(session); counts.salesRecorded++; }
+      if (session.payment_status === "paid") recordSaleResult(await finalizeSession(session));
       else if (session.status === "open") {
         try { session = await stripe.checkout.sessions.expire(session.id); }
         catch { session = await stripe.checkout.sessions.retrieve(session.id); }
         // Completion can win the race with expiry and attach a new intent.
         rememberIntent();
         if (session.status === "expired") counts.sessionsExpired++;
-        else if (session.payment_status === "paid") { await finalizeSession(session); counts.salesRecorded++; }
+        else if (session.payment_status === "paid") recordSaleResult(await finalizeSession(session));
         else retainProcessing(session.metadata);
       } else if (session.status === "complete") retainProcessing(session.metadata);
     } catch { counts.errors++; }
@@ -133,13 +140,13 @@ export async function reconcileLegacyPayments() {
     if (outOfTime()) break;
     try {
       if (intent.metadata.reservation_id || !belongsToSite(intent.metadata) || sessionIntentIds.has(intent.id)) continue;
-      if (intent.status === "succeeded") { await finalizePayment(intent); counts.salesRecorded++; }
+      if (intent.status === "succeeded") recordSaleResult(await finalizePayment(intent));
       else if (intent.status === "processing") retainProcessing(intent.metadata);
       else if (intent.status !== "canceled") {
         try { intent = await stripe.paymentIntents.cancel(intent.id, { cancellation_reason: "abandoned" }); }
         catch { intent = await stripe.paymentIntents.retrieve(intent.id); }
         if (intent.status === "canceled") counts.intentsCanceled++;
-        else if (intent.status === "succeeded") { await finalizePayment(intent); counts.salesRecorded++; }
+        else if (intent.status === "succeeded") recordSaleResult(await finalizePayment(intent));
         else retainProcessing(intent.metadata);
       }
     } catch { counts.errors++; }

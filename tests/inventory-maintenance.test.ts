@@ -20,8 +20,8 @@ before(async () => {
     "test-database": 'import {ports} from "test-ports"; export function createServerSupabaseClient() { return ports.db; }',
     "test-inventory": `import {ports} from "test-ports";
       export {paintingIdsFromMetadata} from ${JSON.stringify(resolve(root, "lib/inventory.ts"))};
-      export async function finalizePayment(intent) { ports.calls.push(["sale", intent.id]); return {status:"paid"}; }
-      export async function finalizeSession(session) { ports.calls.push(["session-sale", session.id]); return {status:"paid"}; }
+      export async function finalizePayment(intent) { ports.calls.push(["sale", intent.id]); return {status:ports.ignoredTests.has(intent.id) ? "released" : "paid"}; }
+      export async function finalizeSession(session) { ports.calls.push(["session-sale", session.id]); return {status:ports.ignoredTests.has(session.id) ? "released" : "paid"}; }
       export async function ensureCartPayment() { throw new Error("Unexpected recovery"); }
       export async function ensureOfferSession() { throw new Error("Unexpected recovery"); }
       export async function reconcileExpiredInventory() { throw new Error("Unexpected recovery"); }`,
@@ -59,6 +59,7 @@ function fixture(input: { intents?: any[]; sessions?: any[]; links?: any[]; endp
   const records = { intents: [], sessions: [], links: [], endpoints: [], ...input };
   const calls: any[][] = [];
   const failures = new Set<string>();
+  const ignoredTests = new Set<string>();
   const changed = new Map<string, any>();
   const list = (kind: keyof typeof records) => async (params: any) => {
     calls.push(["list", kind, structuredClone(params)]);
@@ -68,7 +69,7 @@ function fixture(input: { intents?: any[]; sessions?: any[]; links?: any[]; endp
     return { data: structuredClone(rows.slice(start, start + params.limit)), has_more: rows.length > start + params.limit };
   };
   const ports: any = {
-    calls,
+    calls, ignoredTests,
     db: { from(name: string) {
       return { async select() {
         if (name === "paintings") return { data: [{ id: "original-one" }, { id: "original-two" }], error: null };
@@ -108,7 +109,7 @@ function fixture(input: { intents?: any[]; sessions?: any[]; links?: any[]; endp
     },
   };
   api.configurePorts(ports);
-  return { calls, failures, changed, records };
+  return { calls, failures, changed, records, ignoredTests };
 }
 
 test("audit pages past 100 records and consistently excludes reservation-backed attempts", async () => {
@@ -136,11 +137,29 @@ test("reconciliation closes older links before sessions, cancels only known lega
     intents: [...Array.from({ length: 100 }, (_, i) => intent(`pi_${i}`, "canceled")), intent("pi_older"), intent("pi_reserved", "requires_action", reservedMetadata), intent("pi_unrelated", "requires_action", { painting_ids: "different-site" }), intent("pi_processing", "processing"), intent("pi_paid", "succeeded"), intent("pi_session_processing", "processing"), intent("pi_session_paid", "succeeded")],
   });
   const result = await api.reconcileLegacyPayments();
-  assert.deepEqual({ ...result, scanned: undefined }, { linksDisabled: 1, sessionsExpired: 1, intentsCanceled: 1, salesRecorded: 2, processingRetained: 2, errors: 0, historyIncomplete: false, processingPaintingIds: ["original-one", "original-two"], scanned: undefined });
+  assert.deepEqual({ ...result, scanned: undefined }, { linksDisabled: 1, sessionsExpired: 1, intentsCanceled: 1, salesRecorded: 2, testSalesIgnored: 0, processingRetained: 2, errors: 0, historyIncomplete: false, processingPaintingIds: ["original-one", "original-two"], scanned: undefined });
   const mutations = f.calls.filter(([kind]) => kind !== "list");
   assert.deepEqual(mutations, [["disable", "plink_older"], ["expire", "cs_older"], ["session-sale", "cs_paid"], ["cancel", "pi_older"], ["sale", "pi_paid"]]);
   const lastLinksPage = f.calls.findIndex((c) => c[0] === "list" && c[1] === "links" && c[2].starting_after);
   assert.ok(lastLinksPage < f.calls.findIndex((c) => c[0] === "disable"), "Finish paging active links before changing the filtered set.");
+});
+
+test("retired test payments are counted separately from real sales, including completion races", async () => {
+  const f = fixture({
+    sessions: [session("cs_test_paid", { status: "complete", payment_status: "paid", payment_intent: "pi_test_session" }), session("cs_test_racing")],
+    intents: [intent("pi_test_direct", "succeeded"), intent("pi_real_paid", "succeeded"), intent("pi_test_session", "succeeded"), intent("pi_test_session_racing", "succeeded"), intent("pi_test_racing")],
+  });
+  for (const id of ["cs_test_paid", "cs_test_racing", "pi_test_direct", "pi_test_racing"]) f.ignoredTests.add(id);
+  f.changed.set("cs_test_racing", session("cs_test_racing", { status: "complete", payment_status: "paid", payment_intent: "pi_test_session_racing" }));
+  f.changed.set("pi_test_racing", intent("pi_test_racing", "succeeded"));
+  const result = await api.reconcileLegacyPayments();
+  assert.equal(result.salesRecorded, 1);
+  assert.equal(result.testSalesIgnored, 4);
+  assert.equal(result.errors, 0);
+  assert.equal(result.processingRetained, 0);
+  assert.equal(result.intentsCanceled, 0);
+  assert.equal(result.sessionsExpired, 0);
+  assert.equal(f.calls.filter(([kind]) => kind === "sale" || kind === "session-sale").length, 5);
 });
 
 test("the 1,000-record cap explicitly blocks an apparently empty audit and incomplete migration", async () => {
