@@ -4,7 +4,6 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "./cart-provider";
 import PaintingImage from "./painting-image";
-import MakeOffer from "./make-offer";
 import { IconArrowLeft } from "./icons";
 import { useModalDialog } from "./use-modal-dialog";
 import type { Painting } from "@/lib/types";
@@ -257,7 +256,6 @@ export default function Detail({ painting, onClose }: Props) {
                     ? "Added to cart ✓"
                     : `Add to cart · $${p.price}`}
               </button>
-              {available && <MakeOffer painting={p} />}
               <div className="muted" style={{ fontSize: 11.5, textAlign: "center" }}>
                 Questions?{" "}
                 <a
