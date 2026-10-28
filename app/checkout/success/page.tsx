@@ -134,7 +134,7 @@ function SuccessShell({ status, orderRef, checking = false, onRetry }: {
     paid: {
       label: "Payment received",
       title: "Thank you.",
-      message: "Your payment is confirmed and your painting is no longer available for purchase. Robert will contact you to arrange delivery.",
+      message: "Your payment is confirmed. Robert will contact you to arrange delivery",
     },
     processing: {
       label: "Payment processing",
